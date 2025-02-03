@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 import { validate, checkWin } from '@/logic/game'
 import ConfettiExplosion from '@/components/ConfettiExplosion.vue'
 
+const { players = ['player1', 'player2'] } = defineProps<{ players?: string[],}>()
+
 // Create a board state with 225 cells (15x15), initially all empty (null)
 const board = ref<(null | 'black' | 'white')[]>(Array(15 * 15).fill(null))
 const moves = new Array<number>(0)
@@ -47,7 +49,7 @@ function handleMouseLeave(index: number) {
     
     <div>
       <h1 class="text-3xl font-bold text-center mb-4">Gobang</h1>
-      <p class="text-center text-gray-100 text-sm">Next move: {{ nextMove }}</p>
+      <p class="text-center text-gray-100 text-sm">Next move: {{ nextMove === "white" ? players[1] : players[0]}}</p>
     </div>
     <div class="relative">
       <div class="grid grid-cols-[repeat(15,1fr)] grid-rows-[repeat(15,1fr)] gap-1.5 p-2 border-2 rounded-xl">
@@ -77,7 +79,7 @@ function handleMouseLeave(index: number) {
       </div>
       <div :class="['absolute flex items-center justify-center rounded-xl inset-0 bg-black z-40 opacity-90', winner === 'black' || winner === 'white' ? '' :
       'hidden' ]">
-        <span class="text-5xl font-bold">Winner is {{winner}}</span>
+        <span class="text-5xl font-bold">Winner is {{ nextMove === "white" ? players[0] : players[1]}}</span>
         <ConfettiExplosion v-if="winner !== null" :particleCount="200" :force="0.3"  :stageHeight="500" :stageWidth="1000"/>
       </div>
     </div>
