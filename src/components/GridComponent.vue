@@ -22,6 +22,8 @@ function handleCellClick(index: number) {
   const { result, state } = validate(moves)
   if (result) {
     board.value = state
+  } else {
+    moves.pop()
   }
 }
 
@@ -80,6 +82,11 @@ function handleMouseLeave(index: number) {
   z-index: 0;
 }
 
+@media (width < 40rem) { 
+  .cell-cross {
+    height: 110%;
+  }
+}
 .cell-cross::before,
 .cell-cross::after {
   content: '';
