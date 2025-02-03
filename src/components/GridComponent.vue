@@ -56,7 +56,7 @@ function handleMouseLeave(index: number) {
       <div class="grid grid-cols-[repeat(15,1fr)] grid-rows-[repeat(15,1fr)] gap-1.5 p-2 border-2 rounded-xl">
         <!-- Iterate over each board cell -->
         <div v-for="(cell, index) in board" :key="index"
-          class="relative h-6 w-6 sm:w-10 sm:h-10 cursor-pointer select-none" @click="handleCellClick(index)"
+          class="relative h-5 w-5 sm:w-8 sm:h-8 cursor-pointer select-none" @click="handleCellClick(index)"
           @mouseenter="handleMouseEnter(index)" @mouseleave="handleMouseLeave(index)">
           <!-- If the cell is empty, show the cross -->
           <div v-if="cell === null">
