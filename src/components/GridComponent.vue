@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { validate } from '@/logic/game'
-import { resourceLimits } from 'worker_threads'
+import { validate, checkWin } from '@/logic/game'
+import ConfettiExplosion from '@/components/ConfettiExplosion.vue'
 
 // Create a board state with 225 cells (15x15), initially all empty (null)
 const board = ref<(null | 'black' | 'white')[]>(Array(15 * 15).fill(null))
@@ -9,6 +9,8 @@ const moves = new Array<number>(0)
 
 // To track which cell is currently hovered (if any)
 const hoveredIndex = ref<number | null>(null)
+
+const winner = ref<(null | 'black' | 'white')>(null)
 
 // Count how many moves have been played
 const moveCount = computed(() => board.value.filter(cell => cell !== null).length)
@@ -25,6 +27,7 @@ function handleCellClick(index: number) {
   } else {
     moves.pop()
   }
+  winner.value = checkWin(state)
 }
 
 // On hover: record which cell is being hovered over
@@ -41,32 +44,41 @@ function handleMouseLeave(index: number) {
 
 <template>
   <div>
+    
     <div>
       <h1 class="text-3xl font-bold text-center mb-4">Gobang</h1>
       <p class="text-center text-gray-100 text-sm">Next move: {{ nextMove }}</p>
     </div>
-    <div class="grid grid-cols-[repeat(15,1fr)] grid-rows-[repeat(15,1fr)] gap-1.5 p-2 border-2 rounded-xl">
-      <!-- Iterate over each board cell -->
-      <div v-for="(cell, index) in board" :key="index" class="relative h-4 w-4 sm:w-8 sm:h-8 cursor-pointer select-none"
-        @click="handleCellClick(index)" @mouseenter="handleMouseEnter(index)" @mouseleave="handleMouseLeave(index)">
-        <!-- If the cell is empty, show the cross -->
-        <div v-if="cell === null">
-          <!-- The cross is drawn via CSS using pseudo-elements -->
-          <div class="cell-cross absolute inset-0"></div>
-          <!-- On hover over an empty cell, show a preview stone -->
-          <div v-if="hoveredIndex === index" :class="[
-            'absolute inset-0 m-auto rounded-full h-4 w-4 sm:w-8 sm:h-8 z-10 opacity-85',
-            nextMove === 'black' ? 'bg-black border border-gray-700' : 'bg-white border border-gray-300'
-          ]"></div>
+    <div class="relative">
+      <div class="grid grid-cols-[repeat(15,1fr)] grid-rows-[repeat(15,1fr)] gap-1.5 p-2 border-2 rounded-xl">
+        <!-- Iterate over each board cell -->
+        <div v-for="(cell, index) in board" :key="index"
+          class="relative h-4 w-4 sm:w-8 sm:h-8 cursor-pointer select-none" @click="handleCellClick(index)"
+          @mouseenter="handleMouseEnter(index)" @mouseleave="handleMouseLeave(index)">
+          <!-- If the cell is empty, show the cross -->
+          <div v-if="cell === null">
+            <!-- The cross is drawn via CSS using pseudo-elements -->
+            <div class="cell-cross absolute inset-0"></div>
+            <!-- On hover over an empty cell, show a preview stone -->
+            <div v-if="hoveredIndex === index" :class="[
+              'absolute inset-0 m-auto rounded-full h-4 w-4 sm:w-8 sm:h-8 z-10 opacity-85',
+              nextMove === 'black' ? 'bg-black border border-gray-700' : 'bg-white border border-gray-300'
+            ]"></div>
+          </div>
+          <!-- If a stone has been placed in the cell, display it -->
+          <div v-else>
+            <div class="cell-cross absolute inset-0"></div>
+            <div :class="[
+              'absolute inset-0 m-auto rounded-full h-4 w-4 sm:w-8 sm:h-8 z-10',
+              cell === 'black' ? 'bg-black border border-gray-700' : 'bg-white border border-gray-300'
+            ]"></div>
+          </div>
         </div>
-        <!-- If a stone has been placed in the cell, display it -->
-        <div v-else>
-          <div class="cell-cross absolute inset-0"></div>
-          <div :class="[
-            'absolute inset-0 m-auto rounded-full h-4 w-4 sm:w-8 sm:h-8 z-10',
-            cell === 'black' ? 'bg-black border border-gray-700' : 'bg-white border border-gray-300'
-          ]"></div>
-        </div>
+      </div>
+      <div :class="['absolute flex items-center justify-center rounded-xl inset-0 bg-black z-40 opacity-90', winner === 'black' || winner === 'white' ? '' :
+      'hidden' ]">
+        <span class="text-5xl font-bold">Winner is {{winner}}</span>
+        <ConfettiExplosion v-if="winner !== null" :particleCount="200" :force="0.3"  :stageHeight="500" :stageWidth="1000"/>
       </div>
     </div>
   </div>
@@ -82,11 +94,12 @@ function handleMouseLeave(index: number) {
   z-index: 0;
 }
 
-@media (width < 40rem) { 
+@media (width < 40rem) {
   .cell-cross {
     height: 110%;
   }
 }
+
 .cell-cross::before,
 .cell-cross::after {
   content: '';

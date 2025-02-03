@@ -51,3 +51,41 @@ export const validate = (moves: number[]): { result: boolean, state: (null | 'bl
   }
   return { result: true, state: currentState }
 }
+
+export const checkWin = (state: (null | 'black' | 'white')[]) : (null | 'black' | 'white') => {
+  const directions = [[1,0], [0,1], [1,1], [1,-1]]
+  for (const [i, cell] of state.entries()) {
+    if (cell === null) {
+      continue
+    }
+    for (const [rowVector, colVector] of directions) {
+      let count = 1
+      let row = Math.floor(i / 15)
+      let col = i % 15
+      while (row + rowVector >= 0 && row + rowVector < 15 && col + colVector >= 0 && col + colVector < 15) {
+        row += rowVector
+        col += colVector
+        if (state[row * 15 + col] === cell) {
+          count += 1
+        } else {
+          break
+        }
+      }
+      row = Math.floor(i / 15)
+      col = i % 15
+      while (row - rowVector >= 0 && row - rowVector < 15 && col - colVector >= 0 && col - colVector < 15) {
+        row -= rowVector
+        col -= colVector
+        if (state[row * 15 + col] === cell) {
+          count += 1
+        } else {
+          break
+        }
+      }
+      if (count >= 5) {
+        return cell
+      }
+    }
+  }
+  return null
+}
