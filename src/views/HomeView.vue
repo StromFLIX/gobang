@@ -2,9 +2,9 @@
 import GridComponent from '@/components/GridComponent.vue'
 import VersusFooter from '@/components/VersusFooter.vue'
 
-const players = ["Flo", "Felix"]
+const players = [{name: "Flo", seed: "player4"}, {name:"Felix", seed:"player25"}]
 
-function shuffleArray(arr: string[]) {
+function shuffleArray(arr: {name: string, seed: string}[]) {
   // Loop from the end of the array to the beginning
   for (let i = arr.length - 1; i > 0; i--) {
     // Pick a random index from 0 to i
