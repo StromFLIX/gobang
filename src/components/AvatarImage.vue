@@ -21,5 +21,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div :class="`bg-blue-400 w-12 h-12 inline-block size-6 rounded-full ring-2 ring-${color}`" v-html="avatarSVG"></div>
+  <div :class="[
+      'bg-blue-400 w-12 h-12 inline-block size-6 rounded-full border-2',
+      color === 'white' ? 'border-white' : 'border-black'
+    ]" v-html="avatarSVG"></div>
 </template>
