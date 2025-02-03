@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { validate, checkWin } from '@/logic/game'
 import ConfettiExplosion from '@/components/ConfettiExplosion.vue'
+import AvatarImage from '@/components/AvatarImage.vue'
 
 const { players = [{name: 'player1', seed: 'player1'}, {name: 'player2', seed: 'player2'},] } = defineProps<{ players?: {name: string, seed: string}[],}>()
 
@@ -62,18 +63,17 @@ function handleMouseLeave(index: number) {
             <!-- The cross is drawn via CSS using pseudo-elements -->
             <div class="cell-cross absolute inset-0"></div>
             <!-- On hover over an empty cell, show a preview stone -->
-            <div v-if="hoveredIndex === index" :class="[
-              'absolute inset-0 m-auto rounded-full h-4 w-4 sm:w-8 sm:h-8 z-10 opacity-85',
-              nextMove === 'black' ? 'bg-black border border-gray-700' : 'bg-white border border-gray-300'
-            ]"></div>
+            <AvatarImage v-if="hoveredIndex === index" :borderSize="'large'" :seed="nextMove === 'black' ? players[0].seed : players[1].seed" :color="nextMove" :class="[
+              'absolute inset-0 m-auto rounded-full h-4 w-4 sm:w-8 sm:h-8 z-10'
+            ]" />
           </div>
           <!-- If a stone has been placed in the cell, display it -->
           <div v-else>
             <div class="cell-cross absolute inset-0"></div>
-            <div :class="[
-              'absolute inset-0 m-auto rounded-full h-4 w-4 sm:w-8 sm:h-8 z-10',
-              cell === 'black' ? 'bg-black border border-gray-700' : 'bg-white border border-gray-300'
-            ]"></div>
+            
+            <AvatarImage :borderSize="'large'" :seed="cell === 'black' ? players[0].seed : players[1].seed" :color="cell" :class="[
+              'absolute inset-0 m-auto rounded-full h-4 w-4 sm:w-8 sm:h-8 z-10'
+            ]" />
           </div>
         </div>
       </div>

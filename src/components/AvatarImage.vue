@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { createAvatar } from '@dicebear/core'
 import { openPeeps } from '@dicebear/collection'
 
-const { seed = 'player4', color = "black" } = defineProps<{ seed?: string, color?: ("white" | "black") }>()
+const { seed = 'player4', color = "black", borderSize = "small" } = defineProps<{ seed?: string, color?: ("white" | "black"), borderSize?: ("small" | "large") }>()
 
 // Create a reactive variable to hold the generated avatar SVG
 const avatarSVG = ref('')
@@ -22,7 +22,8 @@ onMounted(() => {
 
 <template>
   <div :class="[
-      'bg-blue-400 w-12 h-12 inline-block size-6 rounded-full border-2',
+      'bg-blue-400 w-12 h-12 inline-block size-6 rounded-full',
+      borderSize === 'small' ? 'border-2' : 'border-3',
       color === 'white' ? 'border-white' : 'border-black'
     ]" v-html="avatarSVG"></div>
 </template>
