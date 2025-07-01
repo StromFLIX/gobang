@@ -23,8 +23,6 @@ onMounted(() => {
 <template>
   <div :class="[
       ' w-5 h-5 sm:h-8 sm:w-8 inline-block size-6 rounded-full',
-      borderSize === 'small' ? 'border-2' : 'border-3',
-      color === 'white' ? 'border-white' : 'border-black',
       color === 'white' ? 'bg-blue-400' : 'bg-red-400'
     ]" v-html="avatarSVG"></div>
 </template>
