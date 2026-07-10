@@ -247,6 +247,8 @@ test('a finished round appears in personal leaderboard history', async ({ browse
 
   await expect(host.getByRole('heading', { name: 'Leaderboard' })).toBeVisible()
   await expect(host.locator('.personal-summary')).toContainText('0–1–0')
+  await expect(host.locator('.personal-summary')).toContainText('1184')
+  await expect(host.locator('.standing-row--current .standing-elo')).toHaveText('1184')
   await host.getByRole('tab', { name: 'Against friends' }).click()
   await expect(host.locator('.matchup-list')).toContainText('Leaderboard friend')
   await expect(host.locator('.result-list')).toContainText(

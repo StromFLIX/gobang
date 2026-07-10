@@ -61,6 +61,7 @@ export interface PeriodPerformance {
 export interface LeaderboardEntry {
   player: Player
   performance: PeriodPerformance
+  elo_rating: number
 }
 
 export interface HeadToHeadEntry {

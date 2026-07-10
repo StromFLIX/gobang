@@ -44,16 +44,18 @@ function leaderboard(): Leaderboard {
     all_time: performance(2, 1),
   }
   return {
-    player: { player: me, performance: myPerformance },
+    player: { player: me, performance: myPerformance, elo_rating: 1198 },
     overall: [
-      { player: me, performance: myPerformance },
+      { player: me, performance: myPerformance, elo_rating: 1198 },
       {
         player: alex,
         performance: { last_7_days: performance(0, 2), all_time: performance(1, 2) },
+        elo_rating: 1305,
       },
       {
         player: sam,
         performance: { last_7_days: performance(1, 0), all_time: performance(1, 0) },
+        elo_rating: 1208,
       },
     ],
     opponents: [
@@ -82,12 +84,15 @@ describe('LeaderboardPanel', () => {
     })
 
     expect(wrapper.text()).toContain('1–0–0')
+    expect(wrapper.text()).toContain('1198')
     expect(wrapper.text()).toContain('Sam beat Alex')
     expect(wrapper.text()).not.toContain('Alex beat Flo')
+    expect(wrapper.findAll('.standing-row')[0].text()).toContain('Alex')
 
     await wrapper.get('.period-control button:last-child').trigger('click')
     expect(wrapper.text()).toContain('2–1–0')
     expect(wrapper.text()).toContain('Alex beat Flo')
+    expect(wrapper.findAll('.standing-row')[0].text()).toContain('Alex')
 
     await wrapper.get('.leaderboard-tabs button:last-child').trigger('click')
     expect(wrapper.text()).toContain('Alex')

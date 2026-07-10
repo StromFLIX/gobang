@@ -194,12 +194,14 @@ class PeriodPerformanceResponse(BaseModel):
 class LeaderboardEntryResponse(BaseModel):
     player: PlayerResponse
     performance: PeriodPerformanceResponse
+    elo_rating: int
 
     @classmethod
     def from_domain(cls, entry: LeaderboardEntry) -> "LeaderboardEntryResponse":
         return cls(
             player=PlayerResponse.from_domain(entry.player),
             performance=PeriodPerformanceResponse.from_domain(entry.performance),
+            elo_rating=entry.elo_rating,
         )
 
 

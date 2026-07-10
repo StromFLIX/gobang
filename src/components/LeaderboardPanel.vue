@@ -29,8 +29,14 @@ const period = ref<Period>('last_7_days')
 const view = ref<View>('overall')
 
 const overallRows = computed(() =>
-  [...(props.leaderboard?.overall ?? [])].sort((left, right) =>
-    comparePerformance(left.performance[period.value], right.performance[period.value], names(left, right)),
+  [...(props.leaderboard?.overall ?? [])].sort(
+    (left, right) =>
+      right.elo_rating - left.elo_rating ||
+      comparePerformance(
+        left.performance[period.value],
+        right.performance[period.value],
+        names(left, right),
+      ),
   ),
 )
 
@@ -45,7 +51,7 @@ const personalPerformance = computed(
 )
 
 const personalRank = computed(() => {
-  if (!personalPerformance.value.games_played) return null
+  if (!props.leaderboard?.player.performance.all_time.games_played) return null
   const index = overallRows.value.findIndex((entry) => entry.player.id === props.playerId)
   return index < 0 ? null : index + 1
 })
@@ -171,15 +177,20 @@ function resultDate(result: LeaderboardResult) {
           <small>{{ personalPerformance.games_played }} rounds</small>
         </div>
         <div>
+          <span>Elo rating</span>
+          <strong>{{ leaderboard.player.elo_rating }}</strong>
+          <small>Current</small>
+        </div>
+        <div>
           <span>Overall rank</span>
           <strong>{{ personalRank ? `#${personalRank}` : '—' }}</strong>
-          <small>{{ period === 'last_7_days' ? '7-day' : 'all-time' }}</small>
+          <small>Elo standings</small>
         </div>
       </div>
 
       <div v-if="view === 'overall'" class="standings" role="table" aria-label="Overall standings">
         <div class="standings__header" role="row">
-          <span>Rank</span><span>Player</span><span>W–L–D</span><span>Win rate</span>
+          <span>Rank</span><span>Player</span><span>Elo</span><span>W–L–D</span><span>Win rate</span>
         </div>
         <div
           v-for="(entry, index) in overallRows"
@@ -197,6 +208,7 @@ function resultDate(result: LeaderboardResult) {
             </div>
             <span v-if="entry.player.id === playerId">You</span>
           </div>
+          <strong class="standing-elo">{{ entry.elo_rating }}</strong>
           <strong class="standing-record">{{ record(selected(entry)) }}</strong>
           <span class="standing-rate">{{ selected(entry).win_rate }}%</span>
         </div>
@@ -311,7 +323,7 @@ function resultDate(result: LeaderboardResult) {
 
 .personal-summary {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
   background: #f6f8f6;
@@ -351,7 +363,7 @@ function resultDate(result: LeaderboardResult) {
 .standings__header,
 .standing-row {
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr) 6rem 5rem;
+  grid-template-columns: 3rem minmax(0, 1fr) 4.5rem 6rem 5rem;
   gap: 0.75rem;
   align-items: center;
 }
@@ -379,6 +391,11 @@ function resultDate(result: LeaderboardResult) {
 .standing-rate {
   color: var(--color-text-muted);
   font-size: 0.78rem;
+}
+
+.standing-elo {
+  color: var(--color-green-dark);
+  font-variant-numeric: tabular-nums;
 }
 
 .standing-player {
@@ -541,13 +558,25 @@ function resultDate(result: LeaderboardResult) {
     padding: 0.8rem;
   }
 
+  .personal-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .personal-summary > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .personal-summary > div:nth-child(n + 3) {
+    border-top: 1px solid var(--color-border);
+  }
+
   .personal-summary > div > strong {
     font-size: 1.25rem;
   }
 
   .standings__header,
   .standing-row {
-    grid-template-columns: 2rem minmax(0, 1fr) 4.5rem;
+    grid-template-columns: 2rem minmax(0, 1fr) 3.25rem 4.5rem;
   }
 
   .standings__header span:last-child,

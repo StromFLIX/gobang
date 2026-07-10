@@ -9,6 +9,9 @@ from typing import Protocol
 from app.domain.game import Game, GameStatus, Move, Player, RoundResult
 from app.domain.rules import MoveError, Stone, apply_move, empty_board
 
+INITIAL_ELO = 1200.0
+ELO_K_FACTOR = 32
+
 
 class GameServiceError(Exception):
     pass
@@ -51,6 +54,7 @@ class PeriodPerformance:
 class LeaderboardEntry:
     player: Player
     performance: PeriodPerformance
+    elo_rating: int = round(INITIAL_ELO)
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,12 +243,26 @@ class GameService:
             )
 
         overall.setdefault(player.id, PeriodPerformance())
+        results.sort(
+            key=lambda result: (
+                result.completed_at,
+                result.host.id,
+                result.guest.id,
+                result.round,
+            )
+        )
+        elo_ratings = self._elo_ratings(results, overall)
         entries = [
-            LeaderboardEntry(player=profiles[player_id], performance=performance)
+            LeaderboardEntry(
+                player=profiles[player_id],
+                performance=performance,
+                elo_rating=round(elo_ratings[player_id]),
+            )
             for player_id, performance in overall.items()
         ]
         entries.sort(
             key=lambda entry: (
+                -entry.elo_rating,
                 -entry.performance.all_time.wins,
                 -entry.performance.all_time.games_played,
                 entry.player.display_name.casefold(),
@@ -260,7 +278,7 @@ class GameService:
                 entry.opponent.display_name.casefold(),
             )
         )
-        results.sort(key=lambda result: result.completed_at, reverse=True)
+        results.reverse()
         personal = next(entry for entry in entries if entry.player.id == player.id)
         return Leaderboard(
             player=personal,
@@ -568,3 +586,24 @@ class GameService:
         player_id: str | None, source_player_id: str, target_player_id: str
     ) -> str | None:
         return target_player_id if player_id == source_player_id else player_id
+
+    @staticmethod
+    def _elo_ratings(
+        results: Sequence[LeaderboardResult], player_ids: dict[str, PeriodPerformance]
+    ) -> dict[str, float]:
+        ratings = {player_id: INITIAL_ELO for player_id in player_ids}
+        for result in results:
+            host_rating = ratings[result.host.id]
+            guest_rating = ratings[result.guest.id]
+            host_expected = 1 / (1 + 10 ** ((guest_rating - host_rating) / 400))
+            if result.winner is None:
+                host_score = 0.5
+            else:
+                host_score = 1.0 if result.winner.id == result.host.id else 0.0
+            ratings[result.host.id] = host_rating + ELO_K_FACTOR * (
+                host_score - host_expected
+            )
+            ratings[result.guest.id] = guest_rating + ELO_K_FACTOR * (
+                (1 - host_score) - (1 - host_expected)
+            )
+        return ratings

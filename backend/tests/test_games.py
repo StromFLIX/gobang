@@ -272,12 +272,16 @@ async def test_leaderboard_combines_recent_and_legacy_results(
     leaderboard = await service.leaderboard(HOST)
 
     host = next(entry for entry in leaderboard.overall if entry.player.id == HOST.id)
+    guest = next(entry for entry in leaderboard.overall if entry.player.id == GUEST.id)
     assert (
         host.performance.all_time.wins,
         host.performance.all_time.losses,
         host.performance.all_time.draws,
     ) == (2, 1, 1)
     assert (host.performance.last_7_days.wins, host.performance.last_7_days.losses) == (0, 1)
+    assert host.elo_rating == 1199
+    assert guest.elo_rating == 1201
+    assert leaderboard.overall[0].player == GUEST
     assert len(leaderboard.opponents) == 1
     assert leaderboard.opponents[0].opponent == GUEST
     assert leaderboard.opponents[0].performance.all_time.games_played == 4

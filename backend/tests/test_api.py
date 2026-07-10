@@ -200,7 +200,9 @@ def test_leaderboard_reports_overall_and_personal_results() -> None:
         assert response.status_code == 200
         body = response.json()
         assert body["player"]["performance"]["all_time"]["losses"] == 1
+        assert body["player"]["elo_rating"] == 1184
         assert body["opponents"][0]["opponent"]["id"] == "guest"
         assert body["opponents"][0]["performance"]["last_7_days"]["losses"] == 1
         assert body["overall"][0]["player"]["id"] == "guest"
+        assert body["overall"][0]["elo_rating"] == 1216
         assert body["results"][0]["winner"]["id"] == "guest"

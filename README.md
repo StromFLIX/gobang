@@ -25,7 +25,7 @@ Local port `8080` is published by `compose.override.yaml`, which Docker Compose 
 
 PocketBase data is stored in the `pocketbase_data` volume. Do not remove that volume during updates.
 
-The lobby leaderboard ranks completed rounds by wins and shows W-L-D records for the last 7 days or all time. `Against friends` groups the current player's record by opponents they have played, while result history shows who beat whom. Scores created before the timestamped result migration remain in all-time totals but cannot appear in the 7-day view or dated result history.
+The lobby leaderboard ranks players by a current Elo rating calculated from timestamped round results, starting at 1200 with a K-factor of 32. It also shows W-L-D records for the last 7 days or all time. `Against friends` groups the current player's record by opponents they have played, while result history shows who beat whom. Scores created before the timestamped result migration remain in all-time totals but cannot affect Elo or appear in the 7-day view or dated result history.
 
 ## Local development
 
