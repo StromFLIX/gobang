@@ -279,6 +279,8 @@ class GameService:
                 raise GameInvalidAction("Game is not active")
             if game.player_for(game.turn) != player_id:
                 raise GameForbidden("It is not your turn")
+            if game.moves and position in game.moves[-1].captured:
+                raise GameInvalidAction("That captured position is blocked for one turn")
 
             try:
                 result = apply_move(game.board, position, game.turn)

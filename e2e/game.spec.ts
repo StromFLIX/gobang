@@ -31,7 +31,6 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   const activePage = (await hostPoint.isEnabled()) ? host : guest
   const waitingPage = activePage === host ? guest : host
 
-  await expect(activePage.getByRole('heading', { name: 'Your turn' })).toBeVisible()
   await activePage
     .getByRole('gridcell', { name: 'Row 1, column 1', exact: true })
     .click()
@@ -42,7 +41,9 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
       exact: true,
     }),
   ).toBeVisible()
-  await expect(waitingPage.getByRole('heading', { name: 'Your turn' })).toBeVisible()
+  await expect(
+    waitingPage.getByRole('gridcell', { name: 'Row 1, column 2', exact: true }),
+  ).toBeEnabled()
   await host.screenshot({ path: 'test-results/realtime-desktop.png', fullPage: true })
 
   await hostContext.close()
@@ -58,9 +59,18 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   const page = await context.newPage()
 
   await configurePlayer(page, 'Mobile player', 'sunglasses')
+  await page.getByRole('button', { name: 'Save player' }).click()
+  await expect(page.getByRole('button', { name: 'Edit player' })).toBeVisible()
+  await page.getByRole('button', { name: 'Edit player' }).click()
+  await expect(page.locator('#player-name')).toHaveValue('Mobile player')
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByRole('button', { name: 'Edit player' })).toBeVisible()
   expect(await page.evaluate(() => navigator.maxTouchPoints)).toBeGreaterThan(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: 'test-results/mobile-lobby.png' })
+  await page.getByRole('heading', { name: 'Leaderboard' }).scrollIntoViewIfNeeded()
+  await page.screenshot({ path: 'test-results/mobile-leaderboard.png' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
   await page.getByRole('button', { name: 'New room' }).click()
   await expect(page).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
@@ -111,6 +121,7 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   await selectedPoint.click()
   await expect(selectedPoint).toBeVisible()
   await expect(page.getByRole('button', { name: 'Confirm selected move' })).toBeEnabled()
+  await page.screenshot({ path: 'test-results/mobile-selected-move.png' })
   await page.getByRole('button', { name: 'Confirm selected move' }).click()
   await expect(
     page.getByRole('gridcell', {
@@ -134,14 +145,14 @@ test('an upgraded guest can continue from another device', async ({ browser }) =
   const roomPath = new URL(firstDevice.url()).pathname
   await firstDevice.getByRole('link', { name: 'Back to lobby' }).click()
 
-  await firstDevice.getByRole('button', { name: 'Sign in' }).click()
-  const registerDialog = firstDevice.getByRole('dialog', { name: 'Create account' })
+  await firstDevice.locator('.account-summary').getByRole('button', { name: 'Save progress' }).click()
+  const registerDialog = firstDevice.getByRole('dialog', { name: 'Save your progress' })
   await registerDialog.getByLabel('Email').fill(email)
   await registerDialog.getByLabel('Password', { exact: true }).fill(password)
   await registerDialog.getByLabel('Confirm password').fill(password)
   await registerDialog
     .locator('form')
-    .getByRole('button', { name: 'Create account' })
+    .getByRole('button', { name: 'Save progress' })
     .click()
   await expect(firstDevice.getByText('Account', { exact: true })).toBeVisible()
   await expect(firstDevice.locator(`a[href="${roomPath}"]`)).toBeVisible()
@@ -150,7 +161,7 @@ test('an upgraded guest can continue from another device', async ({ browser }) =
   const secondDevice = await secondContext.newPage()
   await secondDevice.goto('/')
   await expect(secondDevice.getByText('Ready your player.')).toBeVisible()
-  await secondDevice.getByRole('button', { name: 'Sign in' }).click()
+  await secondDevice.locator('.account-summary').getByRole('button', { name: 'Save progress' }).click()
   const loginDialog = secondDevice.getByRole('dialog')
   await loginDialog.getByRole('button', { name: 'Sign in' }).click()
   await loginDialog.getByLabel('Email').fill(email)
@@ -191,6 +202,7 @@ test('a finished round appears in personal leaderboard history', async ({ browse
   await expect(host.locator('.result-list')).toContainText(
     'Leaderboard friend beat Leaderboard host',
   )
+  await host.screenshot({ path: 'test-results/personal-leaderboard.png', fullPage: true })
 
   await hostContext.close()
   await guestContext.close()

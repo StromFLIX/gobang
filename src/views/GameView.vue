@@ -45,6 +45,10 @@ const lastMove = computed(() => {
   const moves = game.value?.moves
   return moves?.length ? moves[moves.length - 1].position : null
 })
+const blockedPositions = computed(() => {
+  const moves = game.value?.moves
+  return game.value?.status === 'active' && moves?.length ? moves[moves.length - 1].captured : []
+})
 const currentTurnPlayer = computed(() =>
   game.value?.turn === 'black' ? blackPlayer.value : whitePlayer.value,
 )
@@ -55,6 +59,14 @@ const isMyTurn = computed(
     connection.value !== 'offline',
 )
 const boardDisabled = computed(() => !isMyTurn.value || pending.value)
+const boardDisabledLabel = computed(() => {
+  if (!game.value || !boardDisabled.value) return ''
+  if (pending.value) return 'Saving move'
+  if (connection.value === 'offline') return 'Offline'
+  if (game.value.status === 'waiting') return 'Waiting for player two'
+  if (isTerminal.value) return 'Round finished'
+  return "Opponent's turn"
+})
 const isHost = computed(() => game.value?.host.id === player.value?.id)
 const isTerminal = computed(() =>
   game.value ? ['won', 'draw', 'resigned'].includes(game.value.status) : false,
@@ -72,7 +84,7 @@ const statusLabel = computed(() => {
     const winner = playerById(game.value.winner_player_id)
     return winner ? `${winner.display_name} wins` : 'Round finished'
   }
-  return isMyTurn.value ? 'Your turn' : `${currentTurnPlayer.value?.display_name ?? 'Opponent'} to move`
+  return isMyTurn.value ? 'Your turn' : 'Waiting'
 })
 
 onMounted(async () => {
@@ -309,21 +321,22 @@ function stoneFor(playerId: string): Stone | null {
         <div :class="['player-rail', { 'player-rail--turn': game.status === 'active' && game.turn === 'black' }]">
           <AvatarImage :seed="blackPlayer?.avatar_seed ?? 'black'" color="black" size="medium" />
           <div>
-            <span class="stone-label">Black</span>
+            <span class="stone-label">
+              Black
+              <em v-if="game.status === 'active' && game.turn === 'black'" class="turn-label">Turn</em>
+            </span>
             <strong>{{ blackPlayer?.display_name ?? 'Waiting' }}</strong>
           </div>
-          <span class="capture-count">{{ game.black_captures }}</span>
-        </div>
-
-        <div class="match-status">
-          <span>{{ statusLabel }}</span>
-          <strong>{{ game.host_score }}–{{ game.guest_score }}</strong>
+          <span class="capture-count"><small>Pairs</small><strong>{{ game.black_captures }}</strong></span>
         </div>
 
         <div :class="['player-rail player-rail--right', { 'player-rail--turn': game.status === 'active' && game.turn === 'white' }]">
-          <span class="capture-count">{{ game.white_captures }}</span>
+          <span class="capture-count"><small>Pairs</small><strong>{{ game.white_captures }}</strong></span>
           <div>
-            <span class="stone-label">White</span>
+            <span class="stone-label">
+              <em v-if="game.status === 'active' && game.turn === 'white'" class="turn-label">Turn</em>
+              White
+            </span>
             <strong>{{ whitePlayer?.display_name ?? 'Waiting' }}</strong>
           </div>
           <AvatarImage :seed="whitePlayer?.avatar_seed ?? 'white'" color="white" size="medium" />
@@ -338,6 +351,8 @@ function stoneFor(playerId: string): Stone | null {
             :black-player="blackPlayer"
             :white-player="whitePlayer"
             :disabled="boardDisabled"
+            :disabled-label="boardDisabledLabel"
+            :blocked-positions="blockedPositions"
             :revision="game.revision"
             :last-move="lastMove"
             @move="playMove"
@@ -366,7 +381,6 @@ function stoneFor(playerId: string): Stone | null {
           <div v-else-if="isTerminal" class="action-block">
             <p class="section-kicker">Round {{ game.round }}</p>
             <h2>{{ statusLabel }}</h2>
-            <p class="score-line">Match score <strong>{{ game.host_score }}–{{ game.guest_score }}</strong></p>
             <button type="button" class="button button--primary" :disabled="pending" @click="toggleRematch">
               <RefreshCw :size="18" />
               {{ myRematchReady ? 'Cancel rematch' : 'Ready for rematch' }}
@@ -377,8 +391,6 @@ function stoneFor(playerId: string): Stone | null {
           </div>
 
           <div v-else class="action-block action-block--compact">
-            <p class="section-kicker">Turn</p>
-            <h2>{{ statusLabel }}</h2>
             <div v-if="resignArmed" class="resign-confirm">
               <span>Resign this round?</span>
               <button type="button" class="icon-button icon-button--muted" title="Keep playing" aria-label="Keep playing" @click="resignArmed = false">

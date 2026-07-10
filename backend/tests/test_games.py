@@ -122,6 +122,29 @@ async def test_move_updates_turn_and_revision(service: GameService) -> None:
 
 
 @pytest.mark.asyncio
+async def test_captured_positions_are_blocked_for_one_turn(
+    service: GameService, repository: MemoryRepository
+) -> None:
+    game = await active_game(service)
+    board = list(game.board)
+    board[0] = Stone.BLACK
+    board[1] = Stone.WHITE
+    board[2] = Stone.WHITE
+    game.board = tuple(board)
+    repository.games[game.id] = deepcopy(game)
+
+    captured = await service.move(game.id, HOST.id, 3, game.revision)
+    assert captured.moves[-1].captured == (1, 2)
+
+    with pytest.raises(GameInvalidAction, match="blocked for one turn"):
+        await service.move(captured.id, GUEST.id, 1, captured.revision)
+
+    intervening = await service.move(captured.id, GUEST.id, 4, captured.revision)
+    reused = await service.move(intervening.id, HOST.id, 1, intervening.revision)
+    assert reused.board[1] is Stone.BLACK
+
+
+@pytest.mark.asyncio
 async def test_only_one_same_revision_move_can_succeed(service: GameService) -> None:
     game = await active_game(service)
 

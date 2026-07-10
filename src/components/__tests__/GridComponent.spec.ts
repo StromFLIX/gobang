@@ -84,11 +84,53 @@ describe('GridComponent', () => {
   it('does not allow selection while the board is locked', async () => {
     const wrapper = mountBoard(true)
 
-    await wrapper.findAll('.board-point')[20].trigger('click')
+    const point = wrapper.findAll('.board-point')[20]
+    await point.trigger('mouseenter')
+    await point.trigger('click')
 
     expect(wrapper.emitted('move')).toBeUndefined()
     expect(wrapper.find('.board-point--selected').exists()).toBe(false)
+    expect(wrapper.find('.stone--preview').exists()).toBe(false)
     expect(wrapper.findAll('.board-point').every((point) => point.attributes('disabled') !== undefined)).toBe(true)
+  })
+
+  it('marks captured positions as unavailable for the next move', async () => {
+    const wrapper = mount(GridComponent, {
+      props: {
+        board: Array.from({ length: 225 }, () => null),
+        turn: 'white',
+        blackPlayer,
+        whitePlayer,
+        disabled: false,
+        revision: 2,
+        lastMove: 3,
+        blockedPositions: [1, 2],
+      },
+    })
+
+    expect(wrapper.findAll('.blocked-marker')).toHaveLength(2)
+    expect(wrapper.findAll('.board-point')[1].attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('.board-point')[1].attributes('aria-label')).toContain('Temporarily blocked')
+    await wrapper.findAll('.board-point')[1].trigger('click')
+    expect(wrapper.emitted('move')).toBeUndefined()
+  })
+
+  it('draws the last-move marker around the outside of the stone', () => {
+    const board = Array.from<null | 'black'>({ length: 225 }).fill(null)
+    board[16] = 'black'
+    const wrapper = mount(GridComponent, {
+      props: {
+        board,
+        turn: 'white',
+        blackPlayer,
+        whitePlayer,
+        disabled: true,
+        revision: 2,
+        lastMove: 16,
+      },
+    })
+
+    expect(wrapper.get('.board-point--last .last-move-ring').exists()).toBe(true)
   })
 
   it('clears a pending selection when canonical revision changes', async () => {

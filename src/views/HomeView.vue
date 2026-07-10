@@ -5,6 +5,7 @@ import {
   Link2,
   LogIn,
   LogOut,
+  Pencil,
   Plus,
   X,
 } from '@lucide/vue'
@@ -46,6 +47,8 @@ const email = ref('')
 const password = ref('')
 const passwordConfirm = ref('')
 const authError = ref('')
+const profileEditing = ref(true)
+const profileSaving = ref(false)
 
 watch(
   player,
@@ -59,6 +62,7 @@ watch(
 
 onMounted(async () => {
   await bootstrapSession()
+  profileEditing.value = !profileConfigured.value
   await Promise.all([loadGames(), loadLeaderboard()])
 })
 
@@ -83,19 +87,45 @@ async function loadLeaderboard() {
 }
 
 async function saveProfile() {
+  if (profileSaving.value) return false
   const name = displayName.value.trim()
   if (!name) {
     pageError.value = 'Choose a player name first.'
     return false
   }
-  await updateProfile(name, avatarSeed.value)
-  pageError.value = ''
-  return true
+  profileSaving.value = true
+  try {
+    await updateProfile(name, avatarSeed.value)
+    profileEditing.value = false
+    pageError.value = ''
+    return true
+  } catch (error) {
+    pageError.value = error instanceof ApiError ? error.message : 'Could not save your player.'
+    return false
+  } finally {
+    profileSaving.value = false
+  }
 }
 
 async function ensureProfile() {
-  if (profileConfigured.value && displayName.value.trim()) return true
+  if (profileConfigured.value && !profileEditing.value) return true
   return saveProfile()
+}
+
+function editProfile() {
+  if (!player.value) return
+  displayName.value = player.value.display_name
+  avatarSeed.value = player.value.avatar_seed
+  pageError.value = ''
+  profileEditing.value = true
+}
+
+function cancelProfileEdit() {
+  if (!player.value) return
+  displayName.value = player.value.display_name
+  avatarSeed.value = player.value.avatar_seed
+  pageError.value = ''
+  profileEditing.value = false
 }
 
 async function createRoom() {
@@ -150,6 +180,7 @@ async function submitAuth() {
       await login(email.value, password.value)
     }
     authOpen.value = false
+    profileEditing.value = false
     await Promise.all([loadGames(), loadLeaderboard()])
   } catch (error) {
     authError.value = error instanceof ApiError ? error.message : 'Could not sign in.'
@@ -161,6 +192,7 @@ async function submitAuth() {
 async function signOut() {
   await logout()
   games.value = []
+  profileEditing.value = true
   await loadLeaderboard()
 }
 
@@ -196,7 +228,7 @@ function gameLabel(game: Game) {
           @click="openAuth('register')"
         >
           <LogIn :size="17" />
-          Sign in
+          Save progress
         </button>
         <button
           v-else
@@ -226,23 +258,67 @@ function gameLabel(game: Game) {
           <span class="session-badge">{{ player.is_guest ? 'This device' : 'Account' }}</span>
         </div>
 
-        <label class="field-label" for="player-name">Name</label>
-        <input
-          id="player-name"
-          v-model="displayName"
-          class="text-input"
-          maxlength="24"
-          autocomplete="nickname"
-          placeholder="Your name"
-          @change="pageError = ''"
-        />
+        <template v-if="profileEditing">
+          <label class="field-label" for="player-name">Name</label>
+          <input
+            id="player-name"
+            v-model="displayName"
+            class="text-input"
+            maxlength="24"
+            autocomplete="nickname"
+            placeholder="Your name"
+            @change="pageError = ''"
+          />
 
-        <span class="field-label">Avatar</span>
-        <AvatarPicker v-model="avatarSeed" />
+          <span class="field-label">Avatar</span>
+          <AvatarPicker v-model="avatarSeed" />
 
-        <button type="button" class="button button--secondary profile-save" @click="saveProfile">
-          Save player
-        </button>
+          <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
+          <div class="profile-actions">
+            <button
+              type="button"
+              class="button button--secondary"
+              :disabled="profileSaving"
+              @click="saveProfile"
+            >
+              Save player
+            </button>
+            <button
+              v-if="profileConfigured"
+              type="button"
+              class="button button--quiet"
+              :disabled="profileSaving"
+              @click="cancelProfileEdit"
+            >
+              Cancel
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="locked-profile">
+            <AvatarImage :seed="player.avatar_seed" size="editor" />
+            <div>
+              <strong>{{ player.display_name }}</strong>
+              <span>{{ player.is_guest ? 'Saved on this device' : 'Progress saved to account' }}</span>
+            </div>
+          </div>
+          <div class="profile-actions">
+            <button type="button" class="button button--secondary" @click="editProfile">
+              <Pencil :size="17" />
+              Edit player
+            </button>
+            <button
+              v-if="player.is_guest"
+              type="button"
+              class="button button--quiet"
+              @click="openAuth('register')"
+            >
+              <LogIn :size="17" />
+              Save progress
+            </button>
+          </div>
+        </template>
       </section>
 
       <section class="room-tool" aria-labelledby="room-title">
@@ -332,7 +408,7 @@ function gameLabel(game: Game) {
         <div class="dialog-header">
           <div>
             <p class="section-kicker">Account</p>
-            <h2 id="auth-title">{{ authMode === 'register' ? 'Create account' : 'Sign in' }}</h2>
+            <h2 id="auth-title">{{ authMode === 'register' ? 'Save your progress' : 'Sign in' }}</h2>
           </div>
           <button
             type="button"
@@ -381,7 +457,7 @@ function gameLabel(game: Game) {
           </template>
           <p v-if="authError" class="form-error" role="alert">{{ authError }}</p>
           <button type="submit" class="button button--primary" :disabled="busy">
-            {{ authMode === 'register' ? 'Create account' : 'Sign in' }}
+            {{ authMode === 'register' ? 'Save progress' : 'Sign in' }}
           </button>
         </form>
       </section>

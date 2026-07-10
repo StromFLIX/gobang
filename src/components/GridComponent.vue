@@ -1,19 +1,24 @@
 <script setup lang="ts">
-import { Check, X } from '@lucide/vue'
+import { Check, LockKeyhole, X } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import AvatarImage from '@/components/AvatarImage.vue'
 import type { Player, Stone } from '@/types/game'
 
-const props = defineProps<{
-  board: (Stone | null)[]
-  turn: Stone
-  blackPlayer: Player | null
-  whitePlayer: Player | null
-  disabled: boolean
-  revision: number
-  lastMove: number | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    board: (Stone | null)[]
+    turn: Stone
+    blackPlayer: Player | null
+    whitePlayer: Player | null
+    disabled: boolean
+    revision: number
+    lastMove: number | null
+    blockedPositions?: number[]
+    disabledLabel?: string
+  }>(),
+  { blockedPositions: () => [], disabledLabel: '' },
+)
 
 const emit = defineEmits<{
   move: [position: number]
@@ -27,6 +32,7 @@ let pointerQuery: MediaQueryList | null = null
 const currentPlayer = computed(() =>
   props.turn === 'black' ? props.blackPlayer : props.whitePlayer,
 )
+const blocked = computed(() => new Set(props.blockedPositions))
 const starPoints = new Set([48, 52, 56, 108, 112, 116, 168, 172, 176])
 
 function syncPointerMode(event?: MediaQueryListEvent) {
@@ -50,7 +56,7 @@ watch(
 )
 
 function choose(position: number) {
-  if (props.disabled || props.board[position] !== null) return
+  if (props.disabled || props.board[position] !== null || isBlocked(position)) return
   if (coarsePointer.value) {
     selected.value = position
     return
@@ -67,55 +73,79 @@ function playerFor(stone: Stone): Player | null {
   return stone === 'black' ? props.blackPlayer : props.whitePlayer
 }
 
+function isBlocked(position: number) {
+  return blocked.value.has(position)
+}
+
+function preview(position: number) {
+  if (props.disabled || props.board[position] !== null || isBlocked(position)) return
+  hovered.value = position
+}
+
 function cellLabel(cell: Stone | null, index: number) {
   const row = Math.floor(index / 15) + 1
   const column = (index % 15) + 1
+  if (isBlocked(index)) return `Temporarily blocked, row ${row}, column ${column}`
   return cell ? `${cell} stone, row ${row}, column ${column}` : `Row ${row}, column ${column}`
 }
 </script>
 
 <template>
   <div class="board-control">
-    <div
-      :class="['gobang-board', { 'gobang-board--disabled': disabled }]"
-      role="grid"
-      aria-label="Gobang board"
-    >
-      <button
-        v-for="(cell, index) in board"
-        :key="index"
-        type="button"
-        :class="[
-          'board-point',
-          {
-            'board-point--last': lastMove === index,
-            'board-point--selected': selected === index,
-          },
-        ]"
-        role="gridcell"
-        :aria-label="cellLabel(cell, index)"
-        :disabled="disabled || cell !== null"
-        @click="choose(index)"
-        @mouseenter="hovered = index"
-        @mouseleave="hovered = null"
+    <div class="board-frame">
+      <div
+        :class="['gobang-board', { 'gobang-board--disabled': disabled }]"
+        role="grid"
+        aria-label="Gobang board"
       >
-        <span v-if="starPoints.has(index)" class="star-point" />
-        <span v-if="cell" class="stone">
-          <AvatarImage
-            :seed="playerFor(cell)?.avatar_seed ?? cell"
-            :color="cell"
-            size="stone"
-          />
-        </span>
-        <span
-          v-else-if="
-            currentPlayer && (selected === index || (!coarsePointer && hovered === index))
-          "
-          class="stone stone--preview"
+        <button
+          v-for="(cell, index) in board"
+          :key="index"
+          type="button"
+          :class="[
+            'board-point',
+            {
+              'board-point--last': lastMove === index,
+              'board-point--selected': selected === index,
+              'board-point--blocked': isBlocked(index),
+            },
+          ]"
+          role="gridcell"
+          :aria-label="cellLabel(cell, index)"
+          :disabled="disabled || cell !== null || isBlocked(index)"
+          @click="choose(index)"
+          @mouseenter="preview(index)"
+          @mouseleave="hovered = null"
         >
-          <AvatarImage :seed="currentPlayer.avatar_seed" :color="turn" size="stone" />
-        </span>
-      </button>
+          <span v-if="starPoints.has(index)" class="star-point" />
+          <span v-if="cell" class="stone">
+            <AvatarImage
+              :seed="playerFor(cell)?.avatar_seed ?? cell"
+              :color="cell"
+              size="stone"
+            />
+            <span v-if="lastMove === index" class="last-move-ring" />
+          </span>
+          <span v-else-if="isBlocked(index)" class="blocked-marker" aria-hidden="true">
+            <X :size="18" :stroke-width="2.5" />
+          </span>
+          <span
+            v-else-if="
+              !disabled &&
+              currentPlayer &&
+              (selected === index || (!coarsePointer && hovered === index))
+            "
+            class="stone stone--preview"
+          >
+            <AvatarImage :seed="currentPlayer.avatar_seed" :color="turn" size="stone" />
+            <span v-if="selected === index" class="selection-ring" />
+          </span>
+        </button>
+      </div>
+      <span v-if="disabled && disabledLabel" class="board-lock" aria-live="polite">
+        <LockKeyhole :size="14" />
+        {{ disabledLabel }}
+      </span>
     </div>
 
     <div v-if="coarsePointer" class="move-confirm" aria-live="polite">
@@ -151,6 +181,10 @@ function cellLabel(cell: Stone | null, index: number) {
   width: 100%;
 }
 
+.board-frame {
+  position: relative;
+}
+
 .gobang-board {
   display: grid;
   width: 100%;
@@ -165,12 +199,7 @@ function cellLabel(cell: Stone | null, index: number) {
   box-shadow:
     0 16px 38px rgba(53, 47, 33, 0.18),
     inset 0 0 0 3px rgba(255, 255, 255, 0.2);
-  transition: filter 160ms ease;
   touch-action: manipulation;
-}
-
-.gobang-board--disabled {
-  filter: saturate(0.82);
 }
 
 .board-point {
@@ -215,6 +244,7 @@ function cellLabel(cell: Stone | null, index: number) {
 
 .board-point:disabled {
   cursor: default;
+  opacity: 1;
 }
 
 .star-point {
@@ -236,25 +266,64 @@ function cellLabel(cell: Stone | null, index: number) {
 }
 
 .stone--preview {
-  opacity: 0.58;
+  opacity: 0.82;
 }
 
-.board-point--last .stone::after {
+.last-move-ring,
+.selection-ring {
   position: absolute;
-  inset: 38%;
-  border: 1.5px solid #f2bd3f;
+  z-index: 3;
+  inset: -10%;
+  border: 2px solid #fff4c5;
   border-radius: 50%;
-  content: '';
+  box-shadow: 0 0 0 1px rgba(56, 44, 19, 0.7);
+  pointer-events: none;
 }
 
-.board-point--selected::after {
-  z-index: 1;
+.selection-ring {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--color-green-dark);
+}
+
+.blocked-marker {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  display: grid;
   width: 70%;
   height: 70%;
-  border: 2px solid #fff;
+  place-items: center;
   border-radius: 50%;
-  background: transparent;
-  transform: translate(-14%, -14%);
+  color: #654d29;
+  background: rgba(248, 239, 215, 0.82);
+  transform: translate(-50%, -50%);
+}
+
+.board-point--blocked .star-point {
+  opacity: 0;
+}
+
+.board-lock {
+  position: absolute;
+  z-index: 5;
+  top: 0.45rem;
+  right: 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: calc(100% - 0.9rem);
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(71, 79, 72, 0.24);
+  border-radius: 5px;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .move-confirm {
