@@ -40,16 +40,7 @@ import { subscribeToGame } from '@/services/pocketbase'
 import type { Game, Leaderboard, MatchmakingTicket } from '@/types/game'
 
 const router = useRouter()
-const {
-  player,
-  ready,
-  profileConfigured,
-  bootstrapSession,
-  updateProfile,
-  register,
-  login,
-  logout,
-} = useSession()
+const { player, ready, bootstrapSession, updateProfile, register, login, logout } = useSession()
 const {
   invitations,
   loading: invitationsLoading,
@@ -60,11 +51,7 @@ const {
   acceptInvitation,
   dismissInvitation,
 } = useInvitations()
-const {
-  stats: presenceStats,
-  heartbeat: presenceHeartbeat,
-  startPresence,
-} = usePresence()
+const { stats: presenceStats, heartbeat: presenceHeartbeat, startPresence } = usePresence()
 
 const displayName = ref('')
 const avatarSeed = ref<string>(AVATAR_PRESETS[0])
@@ -77,13 +64,14 @@ const busy = ref(false)
 const pageError = ref('')
 const authOpen = ref(false)
 const authMode = ref<'login' | 'register'>('register')
+const authNeedsPlayerName = ref(false)
 const mergePrompt = ref(false)
 const email = ref('')
 const password = ref('')
 const passwordConfirm = ref('')
 const authError = ref('')
 const mergeNotice = ref('')
-const profileEditing = ref(true)
+const profileEditing = ref(false)
 const profileSaving = ref(false)
 const showAllOpponents = ref(false)
 const matchmakingOpen = ref(false)
@@ -96,12 +84,17 @@ let matchmakingPollTimer: ReturnType<typeof setInterval> | null = null
 let matchmakingElapsedTimer: ReturnType<typeof setInterval> | null = null
 let matchmakingPollBusy = false
 let matchmakingNavigating = false
+let profileSavePromise: Promise<boolean> | null = null
+let gamesLoadPromise: Promise<void> | null = null
 
 const opponentGroups = computed(() =>
   player.value ? groupGamesByOpponent(games.value, player.value.id) : [],
 )
 const visibleOpponentGroups = computed(() =>
   showAllOpponents.value ? opponentGroups.value : opponentGroups.value.slice(0, 5),
+)
+const hasPlayerName = computed(() =>
+  Boolean(player.value && player.value.display_name !== 'Player'),
 )
 const waitingGames = computed(() =>
   games.value.filter((game) => game.status === 'waiting' && !game.guest),
@@ -137,13 +130,9 @@ watch(
 onMounted(async () => {
   await bootstrapSession()
   startPresence()
-  profileEditing.value = !profileConfigured.value
   await Promise.all([loadGames(), loadLeaderboard()])
   if (player.value && !player.value.is_guest) {
-    await Promise.all([
-      startInvitationUpdates(handleInvitationUpdate),
-      restoreMatchmaking(),
-    ])
+    await Promise.all([startInvitationUpdates(handleInvitationUpdate), restoreMatchmaking()])
   }
 })
 
@@ -190,13 +179,19 @@ async function challengePlayer(playerId: string) {
   }
 }
 
-async function loadGames() {
-  try {
-    games.value = (await api.listGames()).filter((game) => game.status !== 'cancelled')
-    await syncGameSubscriptions()
-  } catch {
-    games.value = []
-  }
+function loadGames() {
+  if (gamesLoadPromise) return gamesLoadPromise
+  gamesLoadPromise = (async () => {
+    try {
+      games.value = (await api.listGames()).filter((game) => game.status !== 'cancelled')
+      await syncGameSubscriptions()
+    } catch {
+      games.value = []
+    } finally {
+      gamesLoadPromise = null
+    }
+  })()
+  return gamesLoadPromise
 }
 
 async function syncGameSubscriptions() {
@@ -221,9 +216,10 @@ function clearGameSubscriptions() {
 }
 
 function updateLobbyGame(nextGame: Game) {
-  games.value = nextGame.status === 'cancelled'
-    ? games.value.filter((game) => game.id !== nextGame.id)
-    : [nextGame, ...games.value.filter((game) => game.id !== nextGame.id)]
+  games.value =
+    nextGame.status === 'cancelled'
+      ? games.value.filter((game) => game.id !== nextGame.id)
+      : [nextGame, ...games.value.filter((game) => game.id !== nextGame.id)]
 }
 
 async function loadLeaderboard() {
@@ -238,36 +234,42 @@ async function loadLeaderboard() {
   }
 }
 
-async function saveProfile() {
-  if (profileSaving.value) return false
+function saveProfile() {
+  if (profileSavePromise) return profileSavePromise
   const name = displayName.value.trim()
   if (!name) {
     pageError.value = 'Choose a player name first.'
-    return false
+    return Promise.resolve(false)
   }
   profileSaving.value = true
-  try {
-    await updateProfile(name, avatarSeed.value)
-    profileEditing.value = false
-    pageError.value = ''
-    return true
-  } catch (error) {
-    pageError.value = error instanceof ApiError ? error.message : 'Could not save your player.'
-    return false
-  } finally {
-    profileSaving.value = false
-  }
+  profileSavePromise = (async () => {
+    try {
+      await updateProfile(name, avatarSeed.value)
+      profileEditing.value = false
+      pageError.value = ''
+      return true
+    } catch (error) {
+      pageError.value = error instanceof ApiError ? error.message : 'Could not save your player.'
+      return false
+    } finally {
+      profileSaving.value = false
+      profileSavePromise = null
+    }
+  })()
+  return profileSavePromise
 }
 
 async function ensureProfile() {
-  if (profileConfigured.value && !profileEditing.value) return true
+  if (hasPlayerName.value && !profileEditing.value) return true
   return saveProfile()
 }
 
 function editProfile() {
   if (!player.value) return
-  displayName.value = player.value.display_name
-  avatarSeed.value = player.value.avatar_seed
+  if (hasPlayerName.value) {
+    displayName.value = player.value.display_name
+    avatarSeed.value = player.value.avatar_seed
+  }
   pageError.value = ''
   profileEditing.value = true
 }
@@ -431,6 +433,7 @@ async function joinGame() {
 
 function openAuth(mode: 'login' | 'register') {
   authMode.value = mode
+  authNeedsPlayerName.value = mode === 'register' && !hasPlayerName.value
   mergePrompt.value = false
   authError.value = ''
   password.value = ''
@@ -440,6 +443,7 @@ function openAuth(mode: 'login' | 'register') {
 
 function setAuthMode(mode: 'login' | 'register') {
   authMode.value = mode
+  authNeedsPlayerName.value = mode === 'register' && !hasPlayerName.value
   mergePrompt.value = false
   authError.value = ''
 }
@@ -450,9 +454,17 @@ async function submitAuth() {
     authError.value = 'Passwords do not match.'
     return
   }
-  if (authMode.value === 'login' && player.value?.is_guest && games.value.length > 0) {
-    mergePrompt.value = true
+  if (authMode.value === 'register' && authNeedsPlayerName.value && !(await saveProfile())) {
+    authError.value = pageError.value || 'Choose a player name first.'
     return
+  }
+  authNeedsPlayerName.value = false
+  if (authMode.value === 'login' && player.value?.is_guest) {
+    await loadGames()
+    if (games.value.length > 0) {
+      mergePrompt.value = true
+      return
+    }
   }
   await finishAuth(false)
 }
@@ -584,13 +596,33 @@ function groupSummary(group: OpponentGameGroup) {
             Five in a row, pair captures, and a live opponent on the other side.
           </p>
 
+          <div v-if="!hasPlayerName" class="lobby-player-setup">
+            <AvatarImage :seed="avatarSeed" size="small" />
+            <div>
+              <label class="field-label" for="lobby-player-name">Your player name</label>
+              <input
+                id="lobby-player-name"
+                v-model="displayName"
+                class="text-input"
+                maxlength="24"
+                autocomplete="nickname"
+                placeholder="Enter your name"
+                @input="pageError = ''"
+              />
+            </div>
+          </div>
+
           <section class="lobby-choice" aria-labelledby="ranked-choice-title">
             <div class="lobby-choice__heading">
               <span><Swords :size="19" /></span>
               <div>
                 <h2 id="ranked-choice-title">Play someone new</h2>
                 <p>
-                  {{ player.is_guest ? 'Sign in or create an account for ranked matchmaking.' : 'Enter the ranked queue and play for Elo.' }}
+                  {{
+                    player.is_guest
+                      ? 'Sign in or create an account for ranked matchmaking.'
+                      : 'Enter the ranked queue and play for Elo.'
+                  }}
                 </p>
               </div>
               <strong v-if="!player.is_guest && leaderboard" class="lobby-choice__rating">
@@ -599,9 +631,18 @@ function groupSummary(group: OpponentGameGroup) {
             </div>
 
             <div class="lobby-population" aria-label="Approximate live population">
-              <span><Radio :size="15" /><strong>{{ presenceStats?.online_players ?? '...' }}</strong> online</span>
-              <span><Users :size="15" /><strong>{{ presenceStats?.playing_players ?? '...' }}</strong> playing</span>
-              <span><Grid3X3 :size="15" /><strong>{{ presenceStats?.active_matches ?? '...' }}</strong> matches</span>
+              <span
+                ><Radio :size="15" /><strong>{{ presenceStats?.online_players ?? '...' }}</strong>
+                online</span
+              >
+              <span
+                ><Users :size="15" /><strong>{{ presenceStats?.playing_players ?? '...' }}</strong>
+                playing</span
+              >
+              <span
+                ><Grid3X3 :size="15" /><strong>{{ presenceStats?.active_matches ?? '...' }}</strong>
+                matches</span
+              >
             </div>
 
             <div v-if="player.is_guest" class="lobby-choice__actions">
@@ -635,7 +676,12 @@ function groupSummary(group: OpponentGameGroup) {
               </div>
             </div>
 
-            <button type="button" class="button button--secondary lobby-private-button" :disabled="busy" @click="startGame">
+            <button
+              type="button"
+              class="button button--secondary lobby-private-button"
+              :disabled="busy"
+              @click="startGame"
+            >
               <Plus :size="19" />
               Start game
             </button>
@@ -669,7 +715,11 @@ function groupSummary(group: OpponentGameGroup) {
 
       <p v-if="mergeNotice" class="merge-notice" role="status">{{ mergeNotice }}</p>
 
-      <section v-if="profileEditing" class="profile-tool profile-tool--editor" aria-labelledby="profile-title">
+      <section
+        v-if="profileEditing"
+        class="profile-tool profile-tool--editor"
+        aria-labelledby="profile-title"
+      >
         <div class="section-heading-row">
           <div>
             <p class="section-kicker">Player</p>
@@ -703,7 +753,7 @@ function groupSummary(group: OpponentGameGroup) {
             Save player
           </button>
           <button
-            v-if="profileConfigured"
+            v-if="hasPlayerName"
             type="button"
             class="button button--quiet"
             :disabled="profileSaving"
@@ -769,7 +819,7 @@ function groupSummary(group: OpponentGameGroup) {
             <ArrowRight :size="18" />
           </RouterLink>
         </div>
-        <p v-else class="empty-game-list">No opponents yet. Start a game below.</p>
+        <p v-else class="empty-game-list">No opponents yet. Create or join a game above.</p>
 
         <button
           v-if="opponentGroups.length > 5"
@@ -784,7 +834,7 @@ function groupSummary(group: OpponentGameGroup) {
         </button>
       </section>
 
-      <div v-if="player.is_guest && profileConfigured" class="account-nudge">
+      <div v-if="player.is_guest && hasPlayerName" class="account-nudge">
         <span>Sign in to keep these games when you switch devices.</span>
         <button type="button" class="button button--quiet" @click="openAuth('login')">
           <LogIn :size="16" />
@@ -797,6 +847,7 @@ function groupSummary(group: OpponentGameGroup) {
         :player-id="player.id"
         :loading="leaderboardLoading"
         :error="leaderboardError"
+        :compact="!leaderboard?.player.performance.all_time.games_played"
         :can-challenge="!player.is_guest"
         :pending-player-ids="outgoingPendingPlayerIds"
         @retry="loadLeaderboard"
@@ -826,7 +877,7 @@ function groupSummary(group: OpponentGameGroup) {
             class="icon-button icon-button--muted"
             :disabled="matchmakingBusy"
             title="Cancel search"
-            aria-label="Cancel search"
+            aria-label="Close matchmaking"
             @click="cancelMatchmaking"
           >
             <X :size="19" />
@@ -887,17 +938,43 @@ function groupSummary(group: OpponentGameGroup) {
         </div>
 
         <div v-if="!mergePrompt" class="segmented-control" aria-label="Account action">
-          <button type="button" :class="{ active: authMode === 'register' }" @click="setAuthMode('register')">
+          <button
+            type="button"
+            :class="{ active: authMode === 'register' }"
+            @click="setAuthMode('register')"
+          >
             Create account
           </button>
-          <button type="button" :class="{ active: authMode === 'login' }" @click="setAuthMode('login')">
+          <button
+            type="button"
+            :class="{ active: authMode === 'login' }"
+            @click="setAuthMode('login')"
+          >
             Sign in
           </button>
         </div>
 
         <form v-if="!mergePrompt" class="auth-form" @submit.prevent="submitAuth">
+          <template v-if="authMode === 'register' && authNeedsPlayerName">
+            <label class="field-label" for="account-player-name">Player name</label>
+            <input
+              id="account-player-name"
+              v-model="displayName"
+              class="text-input"
+              maxlength="24"
+              required
+              autocomplete="nickname"
+            />
+          </template>
           <label class="field-label" for="account-email">Email</label>
-          <input id="account-email" v-model="email" class="text-input" type="email" required autocomplete="email" />
+          <input
+            id="account-email"
+            v-model="email"
+            class="text-input"
+            type="email"
+            required
+            autocomplete="email"
+          />
           <label class="field-label" for="account-password">Password</label>
           <input
             id="account-password"
@@ -930,8 +1007,8 @@ function groupSummary(group: OpponentGameGroup) {
         </form>
         <div v-else class="merge-choice">
           <p>
-            This guest profile has {{ guestGameLabel }}. You can move them into the account
-            you are signing in to, including scores and round history.
+            This guest profile has {{ guestGameLabel }}. You can move them into the account you are
+            signing in to, including scores and round history.
           </p>
           <p class="merge-choice__warning">
             Signing in without merging leaves this progress behind on the guest profile.
@@ -953,7 +1030,12 @@ function groupSummary(group: OpponentGameGroup) {
           >
             Sign in without merging
           </button>
-          <button type="button" class="button button--quiet" :disabled="busy" @click="mergePrompt = false">
+          <button
+            type="button"
+            class="button button--quiet"
+            :disabled="busy"
+            @click="mergePrompt = false"
+          >
             Back
           </button>
         </div>

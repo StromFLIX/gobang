@@ -1,6 +1,17 @@
 <script setup lang="ts">
-import { Check, ChevronLeft, ChevronRight, RefreshCw, Search, Swords, Trophy, Users } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  RefreshCw,
+  Search,
+  Swords,
+  Trophy,
+  Users,
+} from '@lucide/vue'
+import { computed, ref, watch } from 'vue'
 
 import AvatarImage from '@/components/AvatarImage.vue'
 import { shortPlayerId } from '@/logic/games'
@@ -21,10 +32,12 @@ const props = withDefaults(
     error: string
     canChallenge?: boolean
     pendingPlayerIds?: string[]
+    compact?: boolean
   }>(),
   {
     canChallenge: false,
     pendingPlayerIds: () => [],
+    compact: false,
   },
 )
 
@@ -40,6 +53,14 @@ const view = ref<View>('overall')
 const overallScope = ref<OverallScope>('nearby')
 const overallPage = ref(1)
 const overallQuery = ref('')
+const expanded = ref(!props.compact)
+
+watch(
+  () => props.compact,
+  (compact) => {
+    if (!compact) expanded.value = true
+  },
+)
 
 const overallRows = computed(() =>
   [...(props.leaderboard?.overall ?? [])].sort(
@@ -78,9 +99,7 @@ const overallPageCount = computed(() =>
   Math.max(1, Math.ceil(filteredOverallRows.value.length / OVERALL_PAGE_SIZE)),
 )
 
-const activeOverallPage = computed(() =>
-  Math.min(overallPage.value, overallPageCount.value),
-)
+const activeOverallPage = computed(() => Math.min(overallPage.value, overallPageCount.value))
 
 const pageRankRange = computed(() => {
   const start = (activeOverallPage.value - 1) * OVERALL_PAGE_SIZE + 1
@@ -93,12 +112,19 @@ const pageRankRange = computed(() => {
 
 const friendRows = computed(() =>
   [...(props.leaderboard?.opponents ?? [])].sort((left, right) =>
-    comparePerformance(left.performance[period.value], right.performance[period.value], opponentNames(left, right)),
+    comparePerformance(
+      left.performance[period.value],
+      right.performance[period.value],
+      opponentNames(left, right),
+    ),
   ),
 )
 
 const personalPerformance = computed(
   () => props.leaderboard?.player.performance[period.value] ?? emptyPerformance(),
+)
+const hasPersonalResults = computed(() =>
+  Boolean(props.leaderboard?.player.performance.all_time.games_played),
 )
 
 const personalRank = computed(() => {
@@ -172,11 +198,7 @@ function changeOverallPage(page: number) {
 }
 
 function canChallengeEntry(entry: LeaderboardEntry) {
-  return (
-    props.canChallenge &&
-    !entry.player.is_guest &&
-    entry.player.id !== props.playerId
-  )
+  return props.canChallenge && !entry.player.is_guest && entry.player.id !== props.playerId
 }
 
 function record(performance: Performance) {
@@ -205,7 +227,19 @@ function resultDate(result: LeaderboardResult) {
         <p class="section-kicker">Records</p>
         <h2 id="leaderboard-title">Leaderboard</h2>
       </div>
-      <div class="period-control" aria-label="Leaderboard period">
+      <button
+        v-if="compact"
+        type="button"
+        class="leaderboard-expand"
+        :aria-expanded="expanded"
+        aria-controls="leaderboard-content"
+        @click="expanded = !expanded"
+      >
+        <ChevronUp v-if="expanded" :size="17" />
+        <ChevronDown v-else :size="17" />
+        {{ expanded ? 'Hide leaderboard' : 'Explore leaderboard' }}
+      </button>
+      <div v-else class="period-control" aria-label="Leaderboard period">
         <button
           type="button"
           :class="{ active: period === 'last_7_days' }"
@@ -213,204 +247,254 @@ function resultDate(result: LeaderboardResult) {
         >
           Last 7 days
         </button>
-        <button type="button" :class="{ active: period === 'all_time' }" @click="period = 'all_time'">
+        <button
+          type="button"
+          :class="{ active: period === 'all_time' }"
+          @click="period = 'all_time'"
+        >
           All time
         </button>
       </div>
     </div>
 
-    <div class="leaderboard-tabs" role="tablist" aria-label="Leaderboard view">
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="view === 'overall'"
-        :class="{ active: view === 'overall' }"
-        @click="view = 'overall'"
-      >
-        <Trophy :size="17" />
-        Overall
-      </button>
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="view === 'friends'"
-        :class="{ active: view === 'friends' }"
-        @click="view = 'friends'"
-      >
-        <Users :size="17" />
-        Against friends
-      </button>
+    <div v-if="compact && !expanded" class="leaderboard-preview">
+      <Trophy :size="20" />
+      <span>Standings, challenges, and results appear here after your first round.</span>
     </div>
 
-    <div v-if="loading" class="leaderboard-state" aria-live="polite">Loading standings…</div>
-    <div v-else-if="error" class="leaderboard-state leaderboard-state--error">
-      <span>{{ error }}</span>
-      <button type="button" class="icon-button icon-button--muted" title="Retry" aria-label="Retry" @click="$emit('retry')">
-        <RefreshCw :size="17" />
-      </button>
-    </div>
-    <template v-else-if="leaderboard">
-      <div class="personal-summary">
-        <div>
-          <span>Your record</span>
-          <strong>{{ record(personalPerformance) }}</strong>
-          <small>W–L–D</small>
-        </div>
-        <div>
-          <span>Win rate</span>
-          <strong>{{ personalPerformance.win_rate }}%</strong>
-          <small>{{ personalPerformance.games_played }} rounds</small>
-        </div>
-        <div>
-          <span>Elo rating</span>
-          <strong>{{ leaderboard.player.elo_rating }}</strong>
-          <small>Current</small>
-        </div>
-        <div>
-          <span>Overall rank</span>
-          <strong>{{ personalRank ? `#${personalRank}` : '—' }}</strong>
-          <small>Elo standings</small>
-        </div>
+    <div v-show="expanded" id="leaderboard-content">
+      <div class="leaderboard-tabs" role="tablist" aria-label="Leaderboard view">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="view === 'overall'"
+          :class="{ active: view === 'overall' }"
+          @click="view = 'overall'"
+        >
+          <Trophy :size="17" />
+          Overall
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="view === 'friends'"
+          :class="{ active: view === 'friends' }"
+          @click="view = 'friends'"
+        >
+          <Users :size="17" />
+          Against friends
+        </button>
       </div>
 
-      <div v-if="view === 'overall'" class="standings" role="table" aria-label="Overall standings">
-        <div class="ranking-toolbar">
-          <div class="ranking-scope" aria-label="Leaderboard range">
-            <button type="button" :class="{ active: !overallQuery && overallScope === 'nearby' }" @click="selectOverallScope('nearby')">
-              Around you
-            </button>
-            <button type="button" :class="{ active: !overallQuery && overallScope === 'top' }" @click="selectOverallScope('top')">
-              Top 10
-            </button>
-            <button type="button" :class="{ active: !overallQuery && overallScope === 'all' }" @click="selectOverallScope('all')">
-              All players
-            </button>
-          </div>
-          <label class="standing-search">
-            <Search :size="16" />
-            <input
-              v-model="overallQuery"
-              type="search"
-              autocomplete="off"
-              aria-label="Find a player"
-              placeholder="Find player"
-              @input="resetOverallPage"
-            />
-          </label>
-        </div>
-        <p v-if="!canChallenge" class="challenge-note">Create an account to challenge ranked players.</p>
-        <div class="standings__header" role="row">
-          <span>Rank</span><span>Player</span><span>Elo</span><span>W–L–D</span><span>Win rate</span><span class="challenge-column">Challenge</span>
-        </div>
-        <div
-          v-for="entry in visibleOverallRows"
-          :key="entry.player.id"
-          class="standing-row"
-          :class="{ 'standing-row--current': entry.player.id === playerId }"
-          role="row"
+      <div v-if="loading" class="leaderboard-state" aria-live="polite">Loading standings…</div>
+      <div v-else-if="error" class="leaderboard-state leaderboard-state--error">
+        <span>{{ error }}</span>
+        <button
+          type="button"
+          class="icon-button icon-button--muted"
+          title="Retry"
+          aria-label="Retry"
+          @click="$emit('retry')"
         >
-          <strong class="standing-rank">{{ selected(entry).games_played ? rankFor(entry) : '—' }}</strong>
-          <div class="standing-player">
-            <AvatarImage :seed="entry.player.avatar_seed" size="small" />
-            <div class="standing-player__identity">
-              <strong>{{ entry.player.display_name }}</strong>
-              <small>{{ shortPlayerId(entry.player.id) }}</small>
-            </div>
-            <span v-if="entry.player.id === playerId">You</span>
+          <RefreshCw :size="17" />
+        </button>
+      </div>
+      <template v-else-if="leaderboard">
+        <div v-if="hasPersonalResults" class="personal-summary">
+          <div>
+            <span>Your record</span>
+            <strong>{{ record(personalPerformance) }}</strong>
+            <small>W–L–D</small>
           </div>
-          <strong class="standing-elo">{{ entry.elo_rating }}</strong>
-          <strong class="standing-record">{{ record(selected(entry)) }}</strong>
-          <span class="standing-rate">{{ selected(entry).win_rate }}%</span>
-          <span class="challenge-column challenge-action">
-            <span v-if="pendingPlayerIds.includes(entry.player.id)" class="challenge-sent">
-              <Check :size="15" /> Sent
+          <div>
+            <span>Win rate</span>
+            <strong>{{ personalPerformance.win_rate }}%</strong>
+            <small>{{ personalPerformance.games_played }} rounds</small>
+          </div>
+          <div>
+            <span>Elo rating</span>
+            <strong>{{ leaderboard.player.elo_rating }}</strong>
+            <small>Current</small>
+          </div>
+          <div>
+            <span>Overall rank</span>
+            <strong>{{ personalRank ? `#${personalRank}` : '—' }}</strong>
+            <small>Elo standings</small>
+          </div>
+        </div>
+        <div v-else class="leaderboard-first-round">
+          <Trophy :size="22" />
+          <div>
+            <strong>Your record starts with your first finished round.</strong>
+            <span>Explore the standings or challenge a registered player.</span>
+          </div>
+        </div>
+
+        <div
+          v-if="view === 'overall'"
+          class="standings"
+          role="table"
+          aria-label="Overall standings"
+        >
+          <div class="ranking-toolbar">
+            <div class="ranking-scope" aria-label="Leaderboard range">
+              <button
+                type="button"
+                :class="{ active: !overallQuery && overallScope === 'nearby' }"
+                @click="selectOverallScope('nearby')"
+              >
+                Around you
+              </button>
+              <button
+                type="button"
+                :class="{ active: !overallQuery && overallScope === 'top' }"
+                @click="selectOverallScope('top')"
+              >
+                Top 10
+              </button>
+              <button
+                type="button"
+                :class="{ active: !overallQuery && overallScope === 'all' }"
+                @click="selectOverallScope('all')"
+              >
+                All players
+              </button>
+            </div>
+            <label class="standing-search">
+              <Search :size="16" />
+              <input
+                v-model="overallQuery"
+                type="search"
+                autocomplete="off"
+                aria-label="Find a player"
+                placeholder="Find player"
+                @input="resetOverallPage"
+              />
+            </label>
+          </div>
+          <p v-if="!canChallenge" class="challenge-note">
+            Create an account to challenge ranked players.
+          </p>
+          <div class="standings__header" role="row">
+            <span>Rank</span><span>Player</span><span>Elo</span><span>W–L–D</span
+            ><span>Win rate</span><span class="challenge-column">Challenge</span>
+          </div>
+          <div
+            v-for="entry in visibleOverallRows"
+            :key="entry.player.id"
+            class="standing-row"
+            :class="{ 'standing-row--current': entry.player.id === playerId }"
+            role="row"
+          >
+            <strong class="standing-rank">{{
+              selected(entry).games_played ? rankFor(entry) : '—'
+            }}</strong>
+            <div class="standing-player">
+              <AvatarImage :seed="entry.player.avatar_seed" size="small" />
+              <div class="standing-player__identity">
+                <strong>{{ entry.player.display_name }}</strong>
+                <small>{{ shortPlayerId(entry.player.id) }}</small>
+              </div>
+              <span v-if="entry.player.id === playerId">You</span>
+            </div>
+            <strong class="standing-elo">{{ entry.elo_rating }}</strong>
+            <strong class="standing-record">{{ record(selected(entry)) }}</strong>
+            <span class="standing-rate">{{ selected(entry).win_rate }}%</span>
+            <span class="challenge-column challenge-action">
+              <span v-if="pendingPlayerIds.includes(entry.player.id)" class="challenge-sent">
+                <Check :size="15" /> Sent
+              </span>
+              <button
+                v-else-if="canChallengeEntry(entry)"
+                type="button"
+                class="icon-button icon-button--muted"
+                :title="`Challenge ${entry.player.display_name}`"
+                :aria-label="`Challenge ${entry.player.display_name}`"
+                @click="$emit('challenge', entry.player.id)"
+              >
+                <Swords :size="17" />
+              </button>
             </span>
+          </div>
+          <p v-if="!visibleOverallRows.length" class="leaderboard-state leaderboard-state--compact">
+            No players match that search.
+          </p>
+          <nav
+            v-if="(overallQuery.trim() || overallScope !== 'nearby') && overallPageCount > 1"
+            class="standings-pagination"
+            aria-label="Leaderboard pages"
+          >
             <button
-              v-else-if="canChallengeEntry(entry)"
               type="button"
               class="icon-button icon-button--muted"
-              :title="`Challenge ${entry.player.display_name}`"
-              :aria-label="`Challenge ${entry.player.display_name}`"
-              @click="$emit('challenge', entry.player.id)"
+              :disabled="activeOverallPage === 1"
+              title="Previous page"
+              aria-label="Previous leaderboard page"
+              @click="changeOverallPage(activeOverallPage - 1)"
             >
-              <Swords :size="17" />
+              <ChevronLeft :size="19" />
             </button>
-          </span>
+            <span aria-live="polite">
+              <strong>Page {{ activeOverallPage }} of {{ overallPageCount }}</strong>
+              <small>{{ pageRankRange }}</small>
+            </span>
+            <button
+              type="button"
+              class="icon-button icon-button--muted"
+              :disabled="activeOverallPage === overallPageCount"
+              title="Next page"
+              aria-label="Next leaderboard page"
+              @click="changeOverallPage(activeOverallPage + 1)"
+            >
+              <ChevronRight :size="19" />
+            </button>
+          </nav>
         </div>
-        <p v-if="!visibleOverallRows.length" class="leaderboard-state leaderboard-state--compact">
-          No players match that search.
-        </p>
-        <nav
-          v-if="(overallQuery.trim() || overallScope !== 'nearby') && overallPageCount > 1"
-          class="standings-pagination"
-          aria-label="Leaderboard pages"
-        >
-          <button
-            type="button"
-            class="icon-button icon-button--muted"
-            :disabled="activeOverallPage === 1"
-            title="Previous page"
-            aria-label="Previous leaderboard page"
-            @click="changeOverallPage(activeOverallPage - 1)"
-          >
-            <ChevronLeft :size="19" />
-          </button>
-          <span aria-live="polite">
-            <strong>Page {{ activeOverallPage }} of {{ overallPageCount }}</strong>
-            <small>{{ pageRankRange }}</small>
-          </span>
-          <button
-            type="button"
-            class="icon-button icon-button--muted"
-            :disabled="activeOverallPage === overallPageCount"
-            title="Next page"
-            aria-label="Next leaderboard page"
-            @click="changeOverallPage(activeOverallPage + 1)"
-          >
-            <ChevronRight :size="19" />
-          </button>
-        </nav>
-      </div>
 
-      <div v-else-if="friendRows.length" class="matchup-list">
-        <div v-for="entry in friendRows" :key="entry.opponent.id" class="matchup-row">
-          <div class="standing-player">
-            <AvatarImage :seed="entry.opponent.avatar_seed" size="small" />
-            <div class="standing-player__identity">
-              <strong>{{ entry.opponent.display_name }}</strong>
-              <small>{{ shortPlayerId(entry.opponent.id) }}</small>
+        <div v-else-if="friendRows.length" class="matchup-list">
+          <div v-for="entry in friendRows" :key="entry.opponent.id" class="matchup-row">
+            <div class="standing-player">
+              <AvatarImage :seed="entry.opponent.avatar_seed" size="small" />
+              <div class="standing-player__identity">
+                <strong>{{ entry.opponent.display_name }}</strong>
+                <small>{{ shortPlayerId(entry.opponent.id) }}</small>
+              </div>
+            </div>
+            <div class="matchup-record">
+              <strong>{{ record(selected(entry)) }}</strong>
+              <span>W–L–D</span>
+            </div>
+            <div class="matchup-rate">
+              <strong>{{ selected(entry).win_rate }}%</strong>
+              <span>{{ selected(entry).games_played }} rounds</span>
             </div>
           </div>
-          <div class="matchup-record">
-            <strong>{{ record(selected(entry)) }}</strong>
-            <span>W–L–D</span>
-          </div>
-          <div class="matchup-rate">
-            <strong>{{ selected(entry).win_rate }}%</strong>
-            <span>{{ selected(entry).games_played }} rounds</span>
-          </div>
         </div>
-      </div>
-      <p v-else class="leaderboard-state">No finished rounds against friends in this period.</p>
+        <p v-else class="leaderboard-state">No finished rounds against friends in this period.</p>
 
-      <div class="result-history">
-        <div class="result-history__heading">
-          <strong>Result history</strong>
-          <span>{{ view === 'overall' ? 'Everyone' : 'Your matches' }}</span>
-        </div>
-        <div v-if="visibleResults.length" class="result-list">
-          <div v-for="result in visibleResults" :key="`${result.completed_at}-${result.host.id}-${result.round}`" class="result-row">
-            <div class="result-avatars">
-              <AvatarImage :seed="result.host.avatar_seed" size="small" />
-              <AvatarImage :seed="result.guest.avatar_seed" size="small" />
-            </div>
-            <strong>{{ resultText(result) }}</strong>
-            <span>{{ resultDate(result) }} · Round {{ result.round }}</span>
+        <div class="result-history">
+          <div class="result-history__heading">
+            <strong>Result history</strong>
+            <span>{{ view === 'overall' ? 'Everyone' : 'Your matches' }}</span>
           </div>
+          <div v-if="visibleResults.length" class="result-list">
+            <div
+              v-for="result in visibleResults"
+              :key="`${result.completed_at}-${result.host.id}-${result.round}`"
+              class="result-row"
+            >
+              <div class="result-avatars">
+                <AvatarImage :seed="result.host.avatar_seed" size="small" />
+                <AvatarImage :seed="result.guest.avatar_seed" size="small" />
+              </div>
+              <strong>{{ resultText(result) }}</strong>
+              <span>{{ resultDate(result) }} · Round {{ result.round }}</span>
+            </div>
+          </div>
+          <p v-else class="leaderboard-state">No recorded results in this period.</p>
         </div>
-        <p v-else class="leaderboard-state">No recorded results in this period.</p>
-      </div>
-    </template>
+      </template>
+    </div>
   </section>
 </template>
 
@@ -436,6 +520,53 @@ function resultDate(result: LeaderboardResult) {
 .leaderboard-header h2 {
   margin-top: 0.15rem;
   font-size: 1.25rem;
+}
+
+.leaderboard-expand {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  color: var(--color-green-dark);
+  background: var(--color-surface-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.leaderboard-preview,
+.leaderboard-first-round {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 1.25rem 1.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.leaderboard-preview svg,
+.leaderboard-first-round svg {
+  flex: 0 0 auto;
+  color: #a76b00;
+}
+
+.leaderboard-first-round {
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background: #f6f8f6;
+}
+
+.leaderboard-first-round div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.leaderboard-first-round strong {
+  color: var(--color-text);
 }
 
 .period-control,

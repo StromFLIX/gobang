@@ -5,14 +5,19 @@ import mindBlownAsset from '@twemoji/svg/1f92f.svg?url'
 import plusOneAsset from '@twemoji/svg/1f44d.svg?url'
 import poopAsset from '@twemoji/svg/1f4a9.svg?url'
 import wowAsset from '@twemoji/svg/1f62e.svg?url'
+import { Send } from '@lucide/vue'
 
 import type { GameReaction, ReactionKind } from '@/types/game'
 
-defineProps<{
-  disabled: boolean
-  incoming: GameReaction | null
-  incomingName: string
-}>()
+withDefaults(
+  defineProps<{
+    disabled: boolean
+    incoming: GameReaction | null
+    incomingName: string
+    incomingMine?: boolean
+  }>(),
+  { incomingMine: false },
+)
 
 defineEmits<{ send: [kind: ReactionKind] }>()
 
@@ -47,8 +52,10 @@ function assetFor(kind: ReactionKind) {
         alt=""
       />
       <strong v-else>GG</strong>
-      <small>{{ incomingName }}</small>
+      <small>{{ incomingMine ? 'Sent by you' : `${incomingName} sent` }}</small>
     </div>
+
+    <span class="reaction-bar__label"><Send :size="13" /> Send a reaction</span>
 
     <button
       v-for="reaction in reactions"
@@ -82,6 +89,19 @@ function assetFor(kind: ReactionKind) {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 5px 18px rgba(24, 42, 31, 0.08);
+}
+
+.reaction-bar__label {
+  display: inline-flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding-top: 0.15rem;
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .reaction-button {
@@ -142,7 +162,7 @@ function assetFor(kind: ReactionKind) {
   background: rgba(29, 37, 32, 0.92);
   box-shadow: 0 10px 30px rgba(17, 27, 21, 0.25);
   pointer-events: none;
-  animation: reaction-rise 1.8s ease-out both;
+  animation: reaction-rise 2.6s ease-out both;
 }
 
 .reaction-popup strong,
@@ -199,10 +219,15 @@ function assetFor(kind: ReactionKind) {
 
 @media (max-width: 430px) {
   .reaction-bar {
-    min-height: 2.5rem;
+    min-height: 3.75rem;
     gap: 0.1rem;
     margin-top: 0.35rem;
     padding: 0.15rem;
+  }
+
+  .reaction-bar__label {
+    padding-top: 0.05rem;
+    font-size: 0.6rem;
   }
 
   .reaction-button {

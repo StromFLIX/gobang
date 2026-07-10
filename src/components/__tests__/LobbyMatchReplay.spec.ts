@@ -45,7 +45,7 @@ describe('LobbyMatchReplay', () => {
     expect(wrapper.findAll('.match-replay__stone')).toHaveLength(0)
     expect(wrapper.text()).toContain('Replay restarting')
 
-    await vi.advanceTimersByTimeAsync(450)
+    await vi.advanceTimersByTimeAsync(900)
     expect(wrapper.findAll('.match-replay__stone')).toHaveLength(1)
   })
 })

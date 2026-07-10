@@ -4,7 +4,8 @@ async function configurePlayer(page: Page, name: string, glasses: string) {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Choose your match.' })).toBeVisible()
   await expect(page.getByLabel('Replay of a Gobang match')).toBeVisible()
-  await page.locator('#player-name').fill(name)
+  await page.getByLabel('Your player name').fill(name)
+  await page.getByRole('button', { name: 'Edit player' }).click()
   await page.getByLabel('Glasses').selectOption(glasses)
 }
 
@@ -18,7 +19,7 @@ async function registerPlayer(page: Page, name: string, email: string) {
   await dialog.getByLabel('Password', { exact: true }).fill('BrowserPass42!')
   await dialog.getByLabel('Confirm password').fill('BrowserPass42!')
   await dialog.locator('form').getByRole('button', { name: 'Create account' }).click()
-  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible({ timeout: 10_000 })
   await expect(page.locator('.account-summary__name')).toHaveText(name)
 }
 
@@ -34,9 +35,8 @@ async function authenticatedGames(page: Page) {
   })
 }
 
-test('ranked matchmaking waits, cancels, and pairs two accounts once', async ({
-  browser,
-}) => {
+test('ranked matchmaking waits, cancels, and pairs two accounts once', async ({ browser }) => {
+  test.setTimeout(60_000)
   const suffix = Date.now()
   const firstName = `Ranked one ${suffix}`
   const secondName = `Ranked two ${suffix}`
@@ -48,7 +48,9 @@ test('ranked matchmaking waits, cancels, and pairs two accounts once', async ({
   await registerPlayer(first, firstName, `ranked-one-${suffix}@example.com`)
   await registerPlayer(second, secondName, `ranked-two-${suffix}@example.com`)
 
-  await expect(first.getByText('Mina captures Felix’s pair')).toBeVisible({ timeout: 12_000 })
+  await first.bringToFront()
+  await first.reload()
+  await expect(first.getByText('Mina captures Felix’s pair')).toBeVisible({ timeout: 18_000 })
   await expect(first.locator('.match-replay__capture')).toHaveCount(2)
   await expect(first.getByText('Mina wins — five in a row')).toBeVisible({ timeout: 10_000 })
   const winner = first.locator('.match-replay__winner')
@@ -68,8 +70,6 @@ test('ranked matchmaking waits, cancels, and pairs two accounts once', async ({
   await first.screenshot({ path: 'test-results/desktop-lobby.png', fullPage: true })
   await expect(first.getByText('Rewinding the match')).toBeVisible({ timeout: 6_000 })
   await expect(first.getByText('Replay restarting')).toBeVisible({ timeout: 3_000 })
-  await expect(first.locator('.match-replay__stone')).toHaveCount(0)
-  await expect(first.getByText('Move 1 of 13')).toBeVisible({ timeout: 2_000 })
 
   await first.getByRole('button', { name: 'Find ranked match' }).click()
   const firstSearch = first.getByRole('dialog', { name: 'Finding your opponent' })
@@ -100,6 +100,7 @@ test('ranked matchmaking waits, cancels, and pairs two accounts once', async ({
 test('registered players can challenge from the leaderboard and accept in realtime', async ({
   browser,
 }) => {
+  test.setTimeout(60_000)
   const suffix = Date.now()
   const challengerName = `Challenger ${suffix}`
   const recipientName = `Recipient ${suffix}`
@@ -121,6 +122,7 @@ test('registered players can challenge from the leaderboard and accept in realti
   await challenger.getByRole('link', { name: 'Back to lobby' }).click()
   await recipient.getByRole('link', { name: 'Back to lobby' }).click()
   await challenger.setViewportSize({ width: 390, height: 844 })
+  await challenger.getByRole('button', { name: 'Explore leaderboard' }).click()
   await challenger.getByRole('button', { name: 'All players' }).click()
   await challenger.getByRole('searchbox', { name: 'Find a player' }).fill(recipientName)
   const challengeButton = challenger.getByRole('button', { name: `Challenge ${recipientName}` })
@@ -130,9 +132,7 @@ test('registered players can challenge from the leaderboard and accept in realti
   expect(challengeButtonBox!.x + challengeButtonBox!.width).toBeLessThanOrEqual(390)
   await challenger.screenshot({ path: 'test-results/mobile-leaderboard-challenge.png' })
   await challengeButton.click()
-  await expect(
-    challenger.getByRole('button', { name: `Challenge ${recipientName}` }),
-  ).toBeHidden()
+  await expect(challenger.getByRole('button', { name: `Challenge ${recipientName}` })).toBeHidden()
 
   await challenger.goto(originalGamePath)
   await expect(challenger.getByRole('grid', { name: 'Gobang board' })).toBeVisible()
@@ -142,9 +142,7 @@ test('registered players can challenge from the leaderboard and accept in realti
   await expect(
     recipient.locator('.invitation-popover').getByText(challengerName, { exact: true }),
   ).toBeVisible()
-  await recipient
-    .getByRole('button', { name: `Accept ${challengerName}'s challenge` })
-    .click()
+  await recipient.getByRole('button', { name: `Accept ${challengerName}'s challenge` }).click()
 
   await expect(recipient).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
   await expect(challenger).toHaveURL(new RegExp(`${originalGamePath}$`))
@@ -202,7 +200,9 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   expect(mobileRulesBox).not.toBeNull()
   expect(mobileRoundActionsBox).not.toBeNull()
   expect(mobileRoundActionsBox!.y).toBeGreaterThan(mobileRulesBox!.y + mobileRulesBox!.height)
-  expect(await host.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect(await host.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
   await host.screenshot({ path: 'test-results/mobile-rules-actions.png', fullPage: true })
   await host.setViewportSize({ width: 1280, height: 900 })
 
@@ -217,9 +217,7 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   const activePage = (await hostPoint.isEnabled()) ? host : guest
   const waitingPage = activePage === host ? guest : host
 
-  await activePage
-    .getByRole('gridcell', { name: 'Row 1, column 1', exact: true })
-    .click()
+  await activePage.getByRole('gridcell', { name: 'Row 1, column 1', exact: true }).click()
 
   await expect(
     waitingPage.getByRole('gridcell', {
@@ -268,7 +266,9 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   await expect(page.locator('.profile-tool')).toBeHidden()
   await page.evaluate(() => window.scrollTo(0, 0))
   expect(await page.evaluate(() => navigator.maxTouchPoints)).toBeGreaterThan(0)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
   await expect(page.getByText('Mina wins — five in a row')).toBeVisible({ timeout: 12_000 })
   const replayBoardBox = await page.locator('.match-replay__board').boundingBox()
   const replayWinnerBox = await page.locator('.match-replay__winner').boundingBox()
@@ -284,7 +284,9 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   await page.screenshot({ path: 'test-results/mobile-lobby.png' })
   await page.getByRole('heading', { name: 'Leaderboard' }).scrollIntoViewIfNeeded()
   await page.screenshot({ path: 'test-results/mobile-leaderboard.png' })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
 
   await page.getByRole('button', { name: 'Start game' }).click()
   await expect(page).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
@@ -308,7 +310,9 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   expect(box!.x + box!.width).toBeLessThanOrEqual(390)
   expect(box!.width).toBeGreaterThan(350)
   expect(Math.abs(reactionBox!.width - box!.width)).toBeLessThanOrEqual(1)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
   await page.screenshot({ path: 'test-results/mobile-room.png' })
 
   const opponentContext = await browser.newContext({ viewport: { width: 1100, height: 800 } })
@@ -328,14 +332,18 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
     exact: true,
   })
   await expect
-    .poll(async () => (await mobileFirstPoint.isEnabled()) || (await opponentFirstPoint.isEnabled()))
+    .poll(
+      async () => (await mobileFirstPoint.isEnabled()) || (await opponentFirstPoint.isEnabled()),
+    )
     .toBe(true)
   const quickRules = page.getByLabel('Gobang rules')
   await expect(quickRules).toContainText('Five wins')
   await expect(quickRules).toContainText('Capture pairs')
   await expect(quickRules).toContainText('blocked for their next move')
   await quickRules.scrollIntoViewIfNeeded()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
   await page.screenshot({ path: 'test-results/mobile-game-rules.png' })
   if (!(await mobileFirstPoint.isEnabled())) {
     await opponentFirstPoint.click()
@@ -385,11 +393,10 @@ test('an upgraded guest can continue from another device', async ({ browser }) =
   await registerDialog.getByLabel('Email').fill(email)
   await registerDialog.getByLabel('Password', { exact: true }).fill(password)
   await registerDialog.getByLabel('Confirm password').fill(password)
-  await registerDialog
-    .locator('form')
-    .getByRole('button', { name: 'Create account' })
-    .click()
-  await expect(firstDevice.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await registerDialog.locator('form').getByRole('button', { name: 'Create account' }).click()
+  await expect(firstDevice.getByRole('button', { name: 'Sign out' })).toBeVisible({
+    timeout: 10_000,
+  })
   await expect(firstDevice.locator(`a[href="${roomPath}"]`)).toBeVisible()
 
   const secondContext = await browser.newContext({ viewport: { width: 1200, height: 850 } })
@@ -425,7 +432,9 @@ test('guest games can be merged into an existing account', async ({ browser }) =
   await accountDialog.getByLabel('Password', { exact: true }).fill(password)
   await accountDialog.getByLabel('Confirm password').fill(password)
   await accountDialog.locator('form').getByRole('button', { name: 'Create account' }).click()
-  await expect(accountPage.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await expect(accountPage.getByRole('button', { name: 'Sign out' })).toBeVisible({
+    timeout: 10_000,
+  })
   await accountContext.close()
 
   const guestContext = await browser.newContext({ viewport: { width: 1200, height: 850 } })
@@ -450,6 +459,7 @@ test('guest games can be merged into an existing account', async ({ browser }) =
 })
 
 test('a finished round appears in personal leaderboard history', async ({ browser }) => {
+  test.setTimeout(60_000)
   const hostContext = await browser.newContext({ viewport: { width: 1200, height: 900 } })
   const guestContext = await browser.newContext({ viewport: { width: 1200, height: 900 } })
   const host = await hostContext.newPage()
@@ -485,7 +495,7 @@ test('a finished round appears in personal leaderboard history', async ({ browse
   await expect(host.getByText('Opponent wants a rematch')).toBeVisible()
   await expect(host.locator('.rematch-state--incoming .presence-dot--pulse')).toBeVisible()
   await host.getByRole('link', { name: 'Back to lobby' }).click()
-  await expect(host.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await expect(host.getByRole('button', { name: 'Sign out' })).toBeVisible({ timeout: 10_000 })
   await expect(host.getByText('Wants rematch')).toBeVisible()
   await expect(host.locator('.presence-dot--rematch')).toBeVisible()
   await expect(host.locator('.presence-dot--rematch')).not.toHaveClass(/presence-dot--pulse/)

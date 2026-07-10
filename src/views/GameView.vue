@@ -3,11 +3,13 @@ import {
   Check,
   ChevronLeft,
   Copy,
+  Crown,
   Flag,
   Grid3X3,
   House,
   RefreshCw,
   Share2,
+  ThumbsUp,
   UserPlus,
   Wifi,
   WifiOff,
@@ -70,6 +72,7 @@ const {
 let unsubscribe: (() => Promise<void>) | null = null
 let reactionUnsubscribe: (() => Promise<void>) | null = null
 let reactionTimer: ReturnType<typeof setTimeout> | null = null
+let accountPromptTimer: ReturnType<typeof setTimeout> | null = null
 
 const inviteCode = computed(() => String(route.params.inviteCode ?? ''))
 const blackPlayer = computed(() => playerById(game.value?.black_player_id ?? null))
@@ -110,6 +113,7 @@ const isHost = computed(() => game.value?.host.id === player.value?.id)
 const isTerminal = computed(() =>
   game.value ? ['won', 'draw', 'resigned'].includes(game.value.status) : false,
 )
+const winnerPlayer = computed(() => playerById(game.value?.winner_player_id ?? null))
 const myRematchReady = computed(() => {
   if (!game.value || !player.value) return false
   return isHost.value ? game.value.host_rematch : game.value.guest_rematch
@@ -118,11 +122,12 @@ const opponentRematchReady = computed(() => {
   if (!game.value || !player.value) return false
   return isHost.value ? game.value.guest_rematch : game.value.host_rematch
 })
-const reactionOpponentName = computed(() =>
+const reactionSenderName = computed(() =>
   incomingReaction.value
-    ? (playerById(incomingReaction.value.sender_id)?.display_name ?? 'Opponent')
+    ? (playerById(incomingReaction.value.sender_id)?.display_name ?? 'Player')
     : '',
 )
+const reactionIsMine = computed(() => incomingReaction.value?.sender_id === player.value?.id)
 const rematchStateLabel = computed(() => {
   if (myRematchReady.value && opponentRematchReady.value) return 'Starting…'
   if (opponentRematchReady.value) return 'Opponent wants a rematch'
@@ -147,12 +152,19 @@ const opponentPresenceLabel = computed(() => {
 watch(
   [isTerminal, () => player.value?.is_guest, () => game.value?.id],
   ([terminal, isGuest, gameId]) => {
+    if (accountPromptTimer) {
+      clearTimeout(accountPromptTimer)
+      accountPromptTimer = null
+    }
     if (!isGuest) {
       accountPromptOpen.value = false
       return
     }
     if (terminal && gameId && !sessionStorage.getItem(accountPromptKey(gameId))) {
-      accountPromptOpen.value = true
+      accountPromptTimer = setTimeout(() => {
+        if (isTerminal.value && game.value?.id === gameId) accountPromptOpen.value = true
+        accountPromptTimer = null
+      }, 3500)
     }
   },
   { flush: 'post' },
@@ -179,6 +191,7 @@ onBeforeUnmount(() => {
   void reactionUnsubscribe?.()
   void stopInvitationUpdates()
   if (reactionTimer) clearTimeout(reactionTimer)
+  if (accountPromptTimer) clearTimeout(accountPromptTimer)
   window.removeEventListener('online', handleOnline)
   window.removeEventListener('offline', handleOffline)
 })
@@ -279,13 +292,13 @@ async function startSubscription() {
 }
 
 function showReaction(reaction: GameReaction) {
-  if (reaction.sender_id === player.value?.id) return
+  if (incomingReaction.value?.nonce === reaction.nonce) return
   incomingReaction.value = reaction
   if (reactionTimer) clearTimeout(reactionTimer)
   reactionTimer = setTimeout(() => {
     incomingReaction.value = null
     reactionTimer = null
-  }, 1800)
+  }, 2600)
 }
 
 async function sendReaction(kind: ReactionKind) {
@@ -293,7 +306,7 @@ async function sendReaction(kind: ReactionKind) {
   reactionPending.value = true
   actionError.value = ''
   try {
-    await api.sendReaction(game.value.id, kind)
+    showReaction(await api.sendReaction(game.value.id, kind))
   } catch (error) {
     actionError.value = error instanceof ApiError ? error.message : 'Could not send reaction.'
   } finally {
@@ -393,6 +406,10 @@ function accountPromptKey(gameId: string) {
 }
 
 function dismissAccountPrompt() {
+  if (accountPromptTimer) {
+    clearTimeout(accountPromptTimer)
+    accountPromptTimer = null
+  }
   if (game.value) sessionStorage.setItem(accountPromptKey(game.value.id), 'dismissed')
   accountPromptOpen.value = false
   accountPromptStep.value = 'offer'
@@ -439,7 +456,12 @@ function stoneFor(playerId: string): Stone | null {
 <template>
   <div class="app-shell game-shell">
     <header class="app-header game-header">
-      <RouterLink to="/" class="brand-mark brand-mark--back" aria-label="Back to lobby" title="Back to lobby">
+      <RouterLink
+        to="/"
+        class="brand-mark brand-mark--back"
+        aria-label="Back to lobby"
+        title="Back to lobby"
+      >
         <ChevronLeft :size="20" />
         <strong>Gobang</strong>
       </RouterLink>
@@ -495,7 +517,12 @@ function stoneFor(playerId: string): Stone | null {
         <span class="field-label">Avatar</span>
         <AvatarPicker v-model="avatarSeed" />
         <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
-        <button type="button" class="button button--primary" :disabled="pending" @click="completeProfile">
+        <button
+          type="button"
+          class="button button--primary"
+          :disabled="pending"
+          @click="completeProfile"
+        >
           Join game
         </button>
       </section>
@@ -510,19 +537,50 @@ function stoneFor(playerId: string): Stone | null {
 
     <main v-else class="game-layout">
       <section class="match-strip" aria-label="Players">
-        <div :class="['player-rail', { 'player-rail--turn': game.status === 'active' && game.turn === 'black' }]">
-          <AvatarImage :seed="blackPlayer?.avatar_seed ?? 'black'" color="black" size="medium" />
+        <div
+          :class="[
+            'player-rail',
+            { 'player-rail--turn': game.status === 'active' && game.turn === 'black' },
+          ]"
+        >
+          <AvatarImage
+            :seed="
+              game.status === 'waiting'
+                ? game.host.avatar_seed
+                : (blackPlayer?.avatar_seed ?? 'black')
+            "
+            :color="game.status === 'waiting' ? 'neutral' : 'black'"
+            size="medium"
+          />
           <div>
             <span class="stone-label">
-              Black
-              <em v-if="game.status === 'active' && game.turn === 'black'" class="turn-label">Turn</em>
+              {{ game.status === 'waiting' ? 'Host' : 'Black' }}
+              <em v-if="game.status === 'active' && game.turn === 'black'" class="turn-label"
+                >Turn</em
+              >
             </span>
-            <strong>{{ blackPlayer?.display_name ?? 'Waiting' }}</strong>
-            <small v-if="blackPlayer" class="player-short-id">{{ shortPlayerId(blackPlayer.id) }}</small>
-            <span
-              v-if="game.status === 'active' && isOpponent(blackPlayer)"
-              class="board-presence"
-            >
+            <strong class="player-name">
+              <Crown
+                v-if="winnerPlayer && winnerPlayer.id === blackPlayer?.id"
+                class="winner-crown"
+                :size="16"
+                fill="currentColor"
+              />
+              <span>
+                {{
+                  game.status === 'waiting'
+                    ? game.host.display_name
+                    : (blackPlayer?.display_name ?? 'Waiting')
+                }}
+              </span>
+            </strong>
+            <small v-if="game.status === 'waiting'" class="player-short-id">{{
+              shortPlayerId(game.host.id)
+            }}</small>
+            <small v-else-if="blackPlayer" class="player-short-id">{{
+              shortPlayerId(blackPlayer.id)
+            }}</small>
+            <span v-if="game.status === 'active' && isOpponent(blackPlayer)" class="board-presence">
               <i
                 :class="[
                   'presence-dot',
@@ -532,24 +590,57 @@ function stoneFor(playerId: string): Stone | null {
               {{ opponentPresenceLabel }}
             </span>
           </div>
-          <span class="stone-total stone-total--black" aria-label="Black stones on board" title="Black stones on board">
+          <span
+            v-if="game.status !== 'waiting'"
+            class="stone-total stone-total--black"
+            aria-label="Black stones on board"
+            title="Black stones on board"
+          >
             <i aria-hidden="true" />
             <strong>{{ blackStoneCount }}</strong>
           </span>
         </div>
 
-        <div :class="['player-rail player-rail--right', { 'player-rail--turn': game.status === 'active' && game.turn === 'white' }]">
-          <span class="stone-total stone-total--white" aria-label="White stones on board" title="White stones on board">
+        <div
+          :class="[
+            'player-rail player-rail--right',
+            { 'player-rail--turn': game.status === 'active' && game.turn === 'white' },
+          ]"
+        >
+          <span
+            v-if="game.status !== 'waiting'"
+            class="stone-total stone-total--white"
+            aria-label="White stones on board"
+            title="White stones on board"
+          >
             <i aria-hidden="true" />
             <strong>{{ whiteStoneCount }}</strong>
           </span>
           <div>
             <span class="stone-label">
-              <em v-if="game.status === 'active' && game.turn === 'white'" class="turn-label">Turn</em>
-              White
+              <em v-if="game.status === 'active' && game.turn === 'white'" class="turn-label"
+                >Turn</em
+              >
+              {{ game.status === 'waiting' ? 'Open seat' : 'White' }}
             </span>
-            <strong>{{ whitePlayer?.display_name ?? 'Waiting' }}</strong>
-            <small v-if="whitePlayer" class="player-short-id">{{ shortPlayerId(whitePlayer.id) }}</small>
+            <strong class="player-name">
+              <span>
+                {{
+                  game.status === 'waiting'
+                    ? 'Waiting for player'
+                    : (whitePlayer?.display_name ?? 'Waiting')
+                }}
+              </span>
+              <Crown
+                v-if="winnerPlayer && winnerPlayer.id === whitePlayer?.id"
+                class="winner-crown"
+                :size="16"
+                fill="currentColor"
+              />
+            </strong>
+            <small v-if="whitePlayer" class="player-short-id">{{
+              shortPlayerId(whitePlayer.id)
+            }}</small>
             <span
               v-if="game.status === 'active' && isOpponent(whitePlayer)"
               class="board-presence board-presence--right"
@@ -563,7 +654,15 @@ function stoneFor(playerId: string): Stone | null {
               {{ opponentPresenceLabel }}
             </span>
           </div>
-          <AvatarImage :seed="whitePlayer?.avatar_seed ?? 'white'" color="white" size="medium" />
+          <span v-if="game.status === 'waiting'" class="open-seat-avatar" aria-hidden="true">
+            <UserPlus :size="19" />
+          </span>
+          <AvatarImage
+            v-else
+            :seed="whitePlayer?.avatar_seed ?? 'white'"
+            color="white"
+            size="medium"
+          />
         </div>
       </section>
 
@@ -581,10 +680,34 @@ function stoneFor(playerId: string): Stone | null {
             :last-move="lastMove"
             @move="playMove"
           />
+          <div
+            v-if="winnerPlayer"
+            :key="`${game.round}-${winnerPlayer.id}`"
+            class="winner-celebration"
+            role="status"
+            aria-live="assertive"
+          >
+            <ThumbsUp
+              class="winner-celebration__thumb winner-celebration__thumb--left"
+              :size="42"
+              fill="currentColor"
+            />
+            <div class="winner-celebration__player">
+              <Crown class="winner-celebration__crown" :size="48" fill="currentColor" />
+              <AvatarImage :seed="winnerPlayer.avatar_seed" size="large" />
+              <strong>{{ winnerPlayer.display_name }} wins!</strong>
+            </div>
+            <ThumbsUp
+              class="winner-celebration__thumb winner-celebration__thumb--right"
+              :size="42"
+              fill="currentColor"
+            />
+          </div>
           <ReactionBar
             :disabled="!game.guest || connection !== 'live' || reactionPending"
             :incoming="incomingReaction"
-            :incoming-name="reactionOpponentName"
+            :incoming-name="reactionSenderName"
+            :incoming-mine="reactionIsMine"
             @send="sendReaction"
           />
           <p v-if="actionError" class="board-message" role="status">{{ actionError }}</p>
@@ -600,14 +723,25 @@ function stoneFor(playerId: string): Stone | null {
             <h2>Game is open</h2>
             <div class="invite-code">
               <code>{{ game.invite_code }}</code>
-              <button type="button" class="icon-button icon-button--muted" title="Copy link" aria-label="Copy game link" @click="shareRoom">
+              <button
+                type="button"
+                class="icon-button icon-button--muted"
+                title="Copy link"
+                aria-label="Copy game link"
+                @click="shareRoom"
+              >
                 <Copy :size="18" />
               </button>
             </div>
             <button type="button" class="button button--secondary" @click="shareRoom">
               <Share2 :size="18" /> Share game
             </button>
-            <button v-if="isHost" type="button" class="button button--danger-quiet" @click="cancelRoom">
+            <button
+              v-if="isHost"
+              type="button"
+              class="button button--danger-quiet"
+              @click="cancelRoom"
+            >
               <X :size="18" /> Cancel game
             </button>
           </div>
@@ -615,22 +749,36 @@ function stoneFor(playerId: string): Stone | null {
           <div v-else-if="isTerminal" class="action-block">
             <p class="section-kicker">Round {{ game.round }}</p>
             <h2>{{ statusLabel }}</h2>
-            <button type="button" class="button button--primary" :disabled="pending" @click="toggleRematch">
+            <button
+              type="button"
+              class="button button--primary"
+              :disabled="pending"
+              @click="toggleRematch"
+            >
               <RefreshCw :size="18" />
               {{ myRematchReady ? 'Cancel rematch' : 'Ready for rematch' }}
             </button>
             <span
               v-if="game.host_rematch || game.guest_rematch"
-              :class="['rematch-state', { 'rematch-state--incoming': opponentRematchReady && !myRematchReady }]"
+              :class="[
+                'rematch-state',
+                { 'rematch-state--incoming': opponentRematchReady && !myRematchReady },
+              ]"
               role="status"
             >
-              <i v-if="opponentRematchReady && !myRematchReady" class="presence-dot presence-dot--rematch presence-dot--pulse" />
+              <i
+                v-if="opponentRematchReady && !myRematchReady"
+                class="presence-dot presence-dot--rematch presence-dot--pulse"
+              />
               {{ rematchStateLabel }}
             </span>
           </div>
 
           <template v-else>
-            <section class="action-block action-block--compact rules-block" aria-labelledby="rules-title">
+            <section
+              class="action-block action-block--compact rules-block"
+              aria-label="Gobang rules"
+            >
               <p id="rules-title" class="section-kicker">Rules</p>
               <div class="quick-rules">
                 <p>
@@ -646,10 +794,22 @@ function stoneFor(playerId: string): Stone | null {
             <div class="resign-action" aria-label="Round actions">
               <div v-if="resignArmed" class="resign-confirm">
                 <span>Resign this round?</span>
-                <button type="button" class="icon-button icon-button--muted" title="Keep playing" aria-label="Keep playing" @click="resignArmed = false">
+                <button
+                  type="button"
+                  class="icon-button icon-button--muted"
+                  title="Keep playing"
+                  aria-label="Keep playing"
+                  @click="resignArmed = false"
+                >
                   <X :size="18" />
                 </button>
-                <button type="button" class="icon-button icon-button--danger" title="Confirm resign" aria-label="Confirm resign" @click="resign">
+                <button
+                  type="button"
+                  class="icon-button icon-button--danger"
+                  title="Confirm resign"
+                  aria-label="Confirm resign"
+                  @click="resign"
+                >
                   <Check :size="18" />
                 </button>
               </div>
@@ -667,12 +827,16 @@ function stoneFor(playerId: string): Stone | null {
         class="auth-dialog progress-dialog"
         role="dialog"
         aria-modal="true"
-        :aria-labelledby="accountPromptStep === 'offer' ? 'progress-title' : 'progress-register-title'"
+        :aria-labelledby="
+          accountPromptStep === 'offer' ? 'progress-title' : 'progress-register-title'
+        "
       >
         <div class="dialog-header">
           <div>
             <p class="section-kicker">Save progress</p>
-            <h2 v-if="accountPromptStep === 'offer'" id="progress-title">Keep your game history?</h2>
+            <h2 v-if="accountPromptStep === 'offer'" id="progress-title">
+              Keep your game history?
+            </h2>
             <h2 v-else id="progress-register-title">Create account</h2>
           </div>
           <button
@@ -688,8 +852,8 @@ function stoneFor(playerId: string): Stone | null {
 
         <div v-if="accountPromptStep === 'offer'" class="progress-choice">
           <p>
-            This game is saved to this browser. Create an account to keep your games,
-            scores, and Elo when you switch devices.
+            This game is saved to this browser. Create an account to keep your games, scores, and
+            Elo when you switch devices.
           </p>
           <button type="button" class="button button--primary" @click="showAccountRegistration">
             <UserPlus :size="18" />
@@ -723,7 +887,9 @@ function stoneFor(playerId: string): Stone | null {
             required
             autocomplete="new-password"
           />
-          <label class="field-label" for="progress-account-password-confirm">Confirm password</label>
+          <label class="field-label" for="progress-account-password-confirm"
+            >Confirm password</label
+          >
           <input
             id="progress-account-password-confirm"
             v-model="accountPasswordConfirm"

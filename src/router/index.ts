@@ -17,4 +17,15 @@ const router = createRouter({
   ],
 })
 
+const CHUNK_RELOAD_KEY = 'gobang.chunk-reload'
+
+router.onError((error, to) => {
+  const chunkLoadFailed = /dynamically imported module|module script failed/i.test(error.message)
+  if (!chunkLoadFailed || sessionStorage.getItem(CHUNK_RELOAD_KEY) === to.fullPath) return
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, to.fullPath)
+  window.location.assign(to.fullPath)
+})
+
+router.afterEach(() => sessionStorage.removeItem(CHUNK_RELOAD_KEY))
+
 export default router

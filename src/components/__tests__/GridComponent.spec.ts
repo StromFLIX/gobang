@@ -47,7 +47,10 @@ function mountBoard(disabled = false) {
 
 describe('GridComponent', () => {
   beforeEach(() => {
-    vi.stubGlobal('matchMedia', vi.fn(() => matchMedia(true)))
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => matchMedia(true)),
+    )
     Object.defineProperty(window.navigator, 'maxTouchPoints', {
       configurable: true,
       value: 0,
@@ -68,7 +71,10 @@ describe('GridComponent', () => {
   })
 
   it('requires confirmation on a touch-capable device', async () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => matchMedia(false)))
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => matchMedia(false)),
+    )
     Object.defineProperty(window.navigator, 'maxTouchPoints', {
       configurable: true,
       value: 1,
@@ -91,7 +97,9 @@ describe('GridComponent', () => {
     expect(wrapper.emitted('move')).toBeUndefined()
     expect(wrapper.find('.board-point--selected').exists()).toBe(false)
     expect(wrapper.find('.stone--preview').exists()).toBe(false)
-    expect(wrapper.findAll('.board-point').every((point) => point.attributes('disabled') !== undefined)).toBe(true)
+    expect(
+      wrapper.findAll('.board-point').every((point) => point.attributes('disabled') !== undefined),
+    ).toBe(true)
   })
 
   it('marks captured positions as unavailable for the next move', async () => {
@@ -110,13 +118,16 @@ describe('GridComponent', () => {
 
     expect(wrapper.findAll('.blocked-marker')).toHaveLength(2)
     expect(wrapper.findAll('.board-point')[1].attributes('disabled')).toBeDefined()
-    expect(wrapper.findAll('.board-point')[1].attributes('aria-label')).toContain('Temporarily blocked')
+    expect(wrapper.findAll('.board-point')[1].attributes('aria-label')).toContain(
+      'Temporarily blocked',
+    )
     await wrapper.findAll('.board-point')[1].trigger('click')
     expect(wrapper.emitted('move')).toBeUndefined()
   })
 
-  it('draws the last-move marker around the outside of the stone', () => {
+  it('uses the player avatar only for the last move', () => {
     const board = Array.from<null | 'black'>({ length: 225 }).fill(null)
+    board[15] = 'black'
     board[16] = 'black'
     const wrapper = mount(GridComponent, {
       props: {
@@ -131,6 +142,9 @@ describe('GridComponent', () => {
     })
 
     expect(wrapper.get('.board-point--last .last-move-ring').exists()).toBe(true)
+    expect(wrapper.get('.board-point--last .avatar').exists()).toBe(true)
+    expect(wrapper.findAll('.stone-disc')).toHaveLength(1)
+    expect(wrapper.findAll('.stone .avatar')).toHaveLength(1)
   })
 
   it('clears a pending selection when canonical revision changes', async () => {

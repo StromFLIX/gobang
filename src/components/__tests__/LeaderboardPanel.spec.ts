@@ -73,6 +73,53 @@ function leaderboard(): Leaderboard {
 }
 
 describe('LeaderboardPanel', () => {
+  it('reveals full controls when loaded results leave compact mode', async () => {
+    const wrapper = mount(LeaderboardPanel, {
+      props: {
+        leaderboard: null,
+        playerId: me.id,
+        loading: true,
+        error: '',
+        compact: true,
+      },
+    })
+
+    await wrapper.setProps({
+      leaderboard: leaderboard(),
+      loading: false,
+      compact: false,
+    })
+
+    expect(wrapper.get('.leaderboard-tabs').isVisible()).toBe(true)
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toContain('Overall')
+  })
+
+  it('collapses zero-value records until a new player explores the leaderboard', async () => {
+    const data = leaderboard()
+    const noRounds = {
+      last_7_days: performance(0, 0),
+      all_time: performance(0, 0),
+    }
+    data.player = { player: me, performance: noRounds, elo_rating: 1200 }
+    const wrapper = mount(LeaderboardPanel, {
+      props: {
+        leaderboard: data,
+        playerId: me.id,
+        loading: false,
+        error: '',
+        compact: true,
+      },
+    })
+
+    expect(wrapper.find('.personal-summary').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Standings, challenges, and results')
+
+    await wrapper.get('button[aria-expanded="false"]').trigger('click')
+
+    expect(wrapper.text()).toContain('Your record starts with your first finished round')
+    expect(wrapper.findAll('.standing-row')).toHaveLength(3)
+  })
+
   it('switches time periods and limits friend results to the current player', async () => {
     const wrapper = mount(LeaderboardPanel, {
       props: {

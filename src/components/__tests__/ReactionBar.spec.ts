@@ -27,12 +27,20 @@ describe('ReactionBar', () => {
     expect(wrapper.emitted('send')).toEqual([['poop']])
 
     await wrapper.setProps({ incoming, incomingName: 'Felix' })
-    expect(
-      wrapper.get('.reaction-popup img[data-reaction="poop"]').attributes('src'),
-    ).toMatch(/^data:image\/svg\+xml/)
-    expect(wrapper.get('.reaction-popup').text()).toContain('Felix')
+    expect(wrapper.get('.reaction-popup img[data-reaction="poop"]').attributes('src')).toMatch(
+      /^data:image\/svg\+xml/,
+    )
+    expect(wrapper.get('.reaction-popup').text()).toContain('Felix sent')
+
+    await wrapper.setProps({ incomingMine: true })
+    expect(wrapper.get('.reaction-popup').text()).toContain('Sent by you')
+    expect(wrapper.get('.reaction-bar__label').text()).toContain('Send a reaction')
 
     await wrapper.setProps({ disabled: true })
-    expect(wrapper.findAll('.reaction-button').every((button) => button.attributes('disabled') !== undefined)).toBe(true)
+    expect(
+      wrapper
+        .findAll('.reaction-button')
+        .every((button) => button.attributes('disabled') !== undefined),
+    ).toBe(true)
   })
 })

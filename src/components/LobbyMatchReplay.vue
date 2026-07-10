@@ -17,7 +17,7 @@ const BOARD_SIZE = 15
 const FORWARD_DELAY = 650
 const RESULT_HOLD_DELAY = 4_800
 const REWIND_DELAY = 110
-const RESTART_DELAY = 450
+const RESTART_DELAY = 900
 const cells = Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, position) => position)
 const capturePair = [10 * BOARD_SIZE + 5, 10 * BOARD_SIZE + 6]
 const moves: ReplayMove[] = [

@@ -120,10 +120,12 @@ function cellLabel(cell: Stone | null, index: number) {
           <span v-if="starPoints.has(index)" class="star-point" />
           <span v-if="cell" class="stone">
             <AvatarImage
+              v-if="lastMove === index"
               :seed="playerFor(cell)?.avatar_seed ?? cell"
               :color="cell"
               size="stone"
             />
+            <span v-else :class="['stone-disc', `stone-disc--${cell}`]" />
             <span v-if="lastMove === index" class="last-move-ring" />
           </span>
           <span v-else-if="isBlocked(index)" class="blocked-marker" aria-hidden="true">
@@ -137,7 +139,7 @@ function cellLabel(cell: Stone | null, index: number) {
             "
             class="stone stone--preview"
           >
-            <AvatarImage :seed="currentPlayer.avatar_seed" :color="turn" size="stone" />
+            <span :class="['stone-disc', `stone-disc--${turn}`]" />
             <span v-if="selected === index" class="selection-ring" />
           </span>
         </button>
@@ -150,7 +152,11 @@ function cellLabel(cell: Stone | null, index: number) {
 
     <div v-if="coarsePointer" class="move-confirm" aria-live="polite">
       <span class="move-confirm__label">
-        {{ selected === null ? 'Select an intersection' : `Row ${Math.floor(selected / 15) + 1}, column ${(selected % 15) + 1}` }}
+        {{
+          selected === null
+            ? 'Select an intersection'
+            : `Row ${Math.floor(selected / 15) + 1}, column ${(selected % 15) + 1}`
+        }}
       </span>
       <button
         type="button"
@@ -267,6 +273,29 @@ function cellLabel(cell: Stone | null, index: number) {
 
 .stone--preview {
   opacity: 0.82;
+}
+
+.stone-disc {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(15, 22, 18, 0.68);
+  border-radius: 50%;
+  box-shadow:
+    inset -0.18rem -0.22rem 0.32rem rgba(0, 0, 0, 0.2),
+    0 2px 5px rgba(23, 34, 28, 0.3);
+}
+
+.stone-disc--black {
+  background: #1d2520;
+}
+
+.stone-disc--white {
+  border-color: #758079;
+  background: #fffdf5;
+  box-shadow:
+    inset -0.18rem -0.22rem 0.32rem rgba(65, 69, 66, 0.14),
+    0 2px 5px rgba(23, 34, 28, 0.22);
 }
 
 .last-move-ring,
