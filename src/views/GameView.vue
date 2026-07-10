@@ -629,30 +629,35 @@ function stoneFor(playerId: string): Stone | null {
             </span>
           </div>
 
-          <div v-else class="action-block action-block--compact">
-            <div class="quick-rules" aria-label="Gobang rules">
-              <p>
-                <strong>Five wins</strong>
-                Connect five or more stones in one line.
-              </p>
-              <p>
-                <strong>Capture pairs</strong>
-                Bracket two enemy stones. Those points stay blocked for their next move.
-              </p>
-            </div>
-            <div v-if="resignArmed" class="resign-confirm">
-              <span>Resign this round?</span>
-              <button type="button" class="icon-button icon-button--muted" title="Keep playing" aria-label="Keep playing" @click="resignArmed = false">
-                <X :size="18" />
+          <template v-else>
+            <section class="action-block action-block--compact rules-block" aria-labelledby="rules-title">
+              <p id="rules-title" class="section-kicker">Rules</p>
+              <div class="quick-rules">
+                <p>
+                  <strong>Five wins</strong>
+                  Connect five or more stones in one line.
+                </p>
+                <p>
+                  <strong>Capture pairs</strong>
+                  Bracket two enemy stones. Those points stay blocked for their next move.
+                </p>
+              </div>
+            </section>
+            <div class="resign-action" aria-label="Round actions">
+              <div v-if="resignArmed" class="resign-confirm">
+                <span>Resign this round?</span>
+                <button type="button" class="icon-button icon-button--muted" title="Keep playing" aria-label="Keep playing" @click="resignArmed = false">
+                  <X :size="18" />
+                </button>
+                <button type="button" class="icon-button icon-button--danger" title="Confirm resign" aria-label="Confirm resign" @click="resign">
+                  <Check :size="18" />
+                </button>
+              </div>
+              <button v-else type="button" class="button button--danger-quiet" @click="resign">
+                <Flag :size="17" /> Resign
               </button>
-              <button type="button" class="icon-button icon-button--danger" title="Confirm resign" aria-label="Confirm resign" @click="resign">
-                <Check :size="18" />
-              </button>
             </div>
-            <button v-else type="button" class="button button--danger-quiet" @click="resign">
-              <Flag :size="17" /> Resign
-            </button>
-          </div>
+          </template>
         </aside>
       </section>
     </main>
