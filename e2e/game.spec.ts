@@ -280,6 +280,13 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   await expect
     .poll(async () => (await mobileFirstPoint.isEnabled()) || (await opponentFirstPoint.isEnabled()))
     .toBe(true)
+  const quickRules = page.getByLabel('Gobang rules')
+  await expect(quickRules).toContainText('Five wins')
+  await expect(quickRules).toContainText('Capture pairs')
+  await expect(quickRules).toContainText('blocked for their next move')
+  await quickRules.scrollIntoViewIfNeeded()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: 'test-results/mobile-game-rules.png' })
   if (!(await mobileFirstPoint.isEnabled())) {
     await opponentFirstPoint.click()
     await expect(

@@ -1055,6 +1055,25 @@
   gap: 0.55rem;
 }
 
+.quick-rules {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.quick-rules p {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.quick-rules strong {
+  color: var(--color-text);
+  font-size: 0.75rem;
+}
+
 .invite-code {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 2.6rem;
@@ -1217,8 +1236,25 @@
   .action-block .score-line,
   .action-block .rematch-state,
   .action-block .invite-code,
+  .action-block .quick-rules,
   .action-block .resign-confirm {
     grid-column: 1 / -1;
+  }
+
+  .quick-rules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+  }
+
+  .quick-rules p {
+    min-width: 0;
+    padding: 0.15rem 0.75rem 0.15rem 0;
+  }
+
+  .quick-rules p + p {
+    padding-right: 0;
+    padding-left: 0.75rem;
+    border-left: 1px solid var(--color-border);
   }
 
   .action-block .button {
