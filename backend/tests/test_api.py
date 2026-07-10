@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.clients.pocketbase import GuestSession, PlayerSession, PocketBaseError
 from app.config import Settings
 from app.domain.game import Game, Player
+from app.domain.invitation import Invitation, InvitationStatus
 from app.main import create_app
 from app.services.games import GameConflict
 
@@ -42,6 +43,44 @@ class MemoryRepository:
         return deepcopy(game)
 
 
+class MemoryInvitationRepository:
+    def __init__(self) -> None:
+        self.invitations: dict[str, Invitation] = {}
+
+    async def create(self, invitation: Invitation) -> Invitation:
+        stored = replace(invitation, id=f"invitation-{len(self.invitations) + 1}")
+        self.invitations[stored.id] = deepcopy(stored)
+        return deepcopy(stored)
+
+    async def get_by_id(self, invitation_id: str) -> Invitation | None:
+        return deepcopy(self.invitations.get(invitation_id))
+
+    async def find_pending(
+        self, challenger_id: str, recipient_id: str
+    ) -> Invitation | None:
+        return next(
+            (
+                deepcopy(invitation)
+                for invitation in self.invitations.values()
+                if invitation.challenger.id == challenger_id
+                and invitation.recipient.id == recipient_id
+                and invitation.status is InvitationStatus.PENDING
+            ),
+            None,
+        )
+
+    async def list_for_player(self, player_id: str) -> Sequence[Invitation]:
+        return [
+            deepcopy(invitation)
+            for invitation in self.invitations.values()
+            if player_id in {invitation.challenger.id, invitation.recipient.id}
+        ]
+
+    async def update(self, invitation: Invitation) -> Invitation:
+        self.invitations[invitation.id] = deepcopy(invitation)
+        return deepcopy(invitation)
+
+
 class FakePocketBase:
     def __init__(self) -> None:
         self.players = {
@@ -49,12 +88,19 @@ class FakePocketBase:
             "guest-token": Player("guest", "Felix", "felix"),
             "third-token": Player("third", "Third", "third"),
             "account-token": Player("account", "Account", "account", is_guest=False),
+            "rival-token": Player("rival", "Rival", "rival", is_guest=False),
         }
 
     async def verify_player(self, token: str) -> PlayerSession:
         if token not in self.players:
             raise PocketBaseError(401, "invalid")
         return PlayerSession(token, self.players[token])
+
+    async def get_player(self, player_id: str) -> Player | None:
+        return next(
+            (player for player in self.players.values() if player.id == player_id),
+            None,
+        )
 
     async def create_guest(self) -> GuestSession:
         player = Player("new-guest", "Player", "random-seed")
@@ -88,6 +134,7 @@ def make_client() -> TestClient:
         settings=Settings(frontend_dist="missing"),
         pocketbase=FakePocketBase(),  # type: ignore[arg-type]
         repository=MemoryRepository(),
+        invitation_repository=MemoryInvitationRepository(),
     )
     return TestClient(app)
 
@@ -134,6 +181,57 @@ def test_guest_progress_can_be_merged_while_signing_in() -> None:
         ).json()
         assert games[0]["id"] == created["id"]
         assert games[0]["host"]["id"] == "account"
+
+
+def test_registered_players_can_challenge_and_accept_before_game_creation() -> None:
+    with make_client() as client:
+        guest_attempt = client.post(
+            "/api/invitations",
+            headers={"Authorization": "Bearer guest-token"},
+            json={"player_id": "rival"},
+        )
+        assert guest_attempt.status_code == 403
+
+        sent = client.post(
+            "/api/invitations",
+            headers={"Authorization": "Bearer account-token"},
+            json={"player_id": "rival"},
+        )
+        assert sent.status_code == 201
+        invitation_id = sent.json()["id"]
+        assert sent.json()["status"] == "pending"
+
+        duplicate = client.post(
+            "/api/invitations",
+            headers={"Authorization": "Bearer account-token"},
+            json={"player_id": "rival"},
+        )
+        assert duplicate.status_code == 409
+        assert client.get(
+            "/api/games", headers={"Authorization": "Bearer account-token"}
+        ).json() == []
+
+        incoming = client.get(
+            "/api/invitations", headers={"Authorization": "Bearer rival-token"}
+        ).json()
+        assert incoming[0]["challenger"]["id"] == "account"
+
+        accepted = client.post(
+            f"/api/invitations/{invitation_id}/accept",
+            headers={"Authorization": "Bearer rival-token"},
+        )
+        assert accepted.status_code == 200
+        assert accepted.json()["status"] == "accepted"
+        assert accepted.json()["game_invite_code"]
+
+        account_games = client.get(
+            "/api/games", headers={"Authorization": "Bearer account-token"}
+        ).json()
+        assert account_games[0]["status"] == "active"
+        assert account_games[0]["guest"]["id"] == "rival"
+        assert client.get(
+            "/api/invitations", headers={"Authorization": "Bearer rival-token"}
+        ).json() == []
 
 
 def test_private_room_turn_and_revision_protection() -> None:

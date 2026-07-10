@@ -6,6 +6,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.clients.pocketbase import PocketBaseClient, PocketBaseError
 from app.domain.game import Player
 from app.services.games import GameService
+from app.services.invitations import InvitationService
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -16,6 +17,10 @@ def get_pocketbase(request: Request) -> PocketBaseClient:
 
 def get_game_service(request: Request) -> GameService:
     return request.app.state.game_service
+
+
+def get_invitation_service(request: Request) -> InvitationService:
+    return request.app.state.invitation_service
 
 
 async def get_current_player(
@@ -35,4 +40,7 @@ async def get_current_player(
 
 CurrentPlayer = Annotated[Player, Depends(get_current_player)]
 GameServiceDependency = Annotated[GameService, Depends(get_game_service)]
+InvitationServiceDependency = Annotated[
+    InvitationService, Depends(get_invitation_service)
+]
 PocketBaseDependency = Annotated[PocketBaseClient, Depends(get_pocketbase)]

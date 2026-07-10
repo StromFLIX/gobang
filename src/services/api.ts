@@ -2,6 +2,7 @@ import type {
   AuthSession,
   Game,
   GuestSession,
+  Invitation,
   Leaderboard,
   MergedAuthSession,
   Player,
@@ -61,6 +62,13 @@ export const api = {
   register: (email: string, password: string) =>
     request<AuthSession>('/api/auth/register', json('POST', { email, password })),
   getLeaderboard: () => request<Leaderboard>('/api/leaderboard'),
+  listInvitations: () => request<Invitation[]>('/api/invitations'),
+  sendInvitation: (playerId: string) =>
+    request<Invitation>('/api/invitations', json('POST', { player_id: playerId })),
+  acceptInvitation: (invitationId: string) =>
+    request<Invitation>(`/api/invitations/${invitationId}/accept`, json('POST')),
+  dismissInvitation: (invitationId: string) =>
+    request<Invitation>(`/api/invitations/${invitationId}/dismiss`, json('POST')),
   listGames: () => request<Game[]>('/api/games'),
   createGame: () => request<Game>('/api/games', json('POST')),
   joinGame: (inviteCode: string) =>

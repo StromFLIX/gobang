@@ -14,11 +14,13 @@ import {
   X,
 } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import AvatarImage from '@/components/AvatarImage.vue'
 import AvatarPicker from '@/components/AvatarPicker.vue'
 import GridComponent from '@/components/GridComponent.vue'
+import InvitationInbox from '@/components/InvitationInbox.vue'
+import { useInvitations } from '@/composables/useInvitations'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
 import { shortPlayerId } from '@/logic/games'
@@ -27,7 +29,17 @@ import { subscribeToGame } from '@/services/pocketbase'
 import type { Game, Player, Stone } from '@/types/game'
 
 const route = useRoute()
+const router = useRouter()
 const { player, ready, profileConfigured, bootstrapSession, updateProfile, register } = useSession()
+const {
+  invitations,
+  loading: invitationsLoading,
+  error: invitationsError,
+  startInvitationUpdates,
+  stopInvitationUpdates,
+  acceptInvitation,
+  dismissInvitation,
+} = useInvitations()
 const game = ref<Game | null>(null)
 const loading = ref(true)
 const pageError = ref('')
@@ -133,15 +145,50 @@ onMounted(async () => {
   }
   if (profileConfigured.value) await joinRoom()
   else loading.value = false
+  if (player.value && !player.value.is_guest) {
+    await startInvitationUpdates(handleInvitationUpdate)
+  }
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
 })
 
 onBeforeUnmount(() => {
   void unsubscribe?.()
+  void stopInvitationUpdates()
   window.removeEventListener('online', handleOnline)
   window.removeEventListener('offline', handleOffline)
 })
+
+async function handleInvitationUpdate(invitation: import('@/types/game').Invitation) {
+  if (
+    invitation.status === 'accepted' &&
+    invitation.game_invite_code &&
+    invitation.challenger.id === player.value?.id
+  ) {
+    await router.push(`/game/${invitation.game_invite_code}`)
+  }
+}
+
+async function acceptChallenge(invitationId: string) {
+  actionError.value = ''
+  try {
+    const invitation = await acceptInvitation(invitationId)
+    if (invitation.game_invite_code) {
+      await router.push(`/game/${invitation.game_invite_code}`)
+    }
+  } catch (error) {
+    actionError.value = error instanceof ApiError ? error.message : 'Could not accept challenge.'
+  }
+}
+
+async function dismissChallenge(invitationId: string) {
+  actionError.value = ''
+  try {
+    await dismissInvitation(invitationId)
+  } catch (error) {
+    actionError.value = error instanceof ApiError ? error.message : 'Could not dismiss challenge.'
+  }
+}
 
 function playerById(playerId: string | null): Player | null {
   if (!game.value || !playerId) return null
@@ -311,6 +358,7 @@ async function registerAfterGame() {
     await register(accountEmail.value, accountPassword.value)
     accountPromptOpen.value = false
     accountPromptStep.value = 'offer'
+    await startInvitationUpdates(handleInvitationUpdate)
     void startSubscription().catch(() => {
       connection.value = 'reconnecting'
     })
@@ -337,6 +385,15 @@ function stoneFor(playerId: string): Stone | null {
         <strong>Gobang</strong>
       </RouterLink>
       <div class="game-header__actions">
+        <InvitationInbox
+          v-if="player && !player.is_guest"
+          :invitations="invitations"
+          :player-id="player.id"
+          :loading="invitationsLoading"
+          :error="invitationsError"
+          @accept="acceptChallenge"
+          @dismiss="dismissChallenge"
+        />
         <span v-if="game" class="round-label">Round {{ game.round }}</span>
         <span :class="['connection-pill', `connection-pill--${connection}`]">
           <Wifi v-if="connection === 'live'" :size="14" />

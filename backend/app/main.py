@@ -5,10 +5,11 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from app.api import auth, games, leaderboard
+from app.api import auth, games, invitations, leaderboard
 from app.clients.pocketbase import PocketBaseClient, PocketBaseError
 from app.config import Settings, get_settings
 from app.repositories.pocketbase_games import PocketBaseGameRepository
+from app.repositories.pocketbase_invitations import PocketBaseInvitationRepository
 from app.services.games import (
     GameConflict,
     GameForbidden,
@@ -17,6 +18,14 @@ from app.services.games import (
     GameRepository,
     GameService,
 )
+from app.services.invitations import (
+    InvitationConflict,
+    InvitationForbidden,
+    InvitationInvalid,
+    InvitationNotFound,
+    InvitationRepository,
+    InvitationService,
+)
 
 
 def create_app(
@@ -24,6 +33,7 @@ def create_app(
     settings: Settings | None = None,
     pocketbase: PocketBaseClient | None = None,
     repository: GameRepository | None = None,
+    invitation_repository: InvitationRepository | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     owns_pocketbase = pocketbase is None
@@ -33,7 +43,14 @@ def create_app(
         client = pocketbase or PocketBaseClient(resolved_settings)
         game_repository = repository or PocketBaseGameRepository(client)
         app.state.pocketbase = client
-        app.state.game_service = GameService(game_repository)
+        game_service = GameService(game_repository)
+        resolved_invitation_repository = invitation_repository or PocketBaseInvitationRepository(
+            client
+        )
+        app.state.game_service = game_service
+        app.state.invitation_service = InvitationService(
+            resolved_invitation_repository, game_service, client.get_player
+        )
         yield
         if owns_pocketbase:
             await client.close()
@@ -41,6 +58,7 @@ def create_app(
     application = FastAPI(title="Gobang API", version="0.1.0", lifespan=lifespan)
     application.include_router(auth.router)
     application.include_router(games.router)
+    application.include_router(invitations.router)
     application.include_router(leaderboard.router)
 
     @application.get("/health", tags=["system"])
@@ -61,6 +79,30 @@ def create_app(
 
     @application.exception_handler(GameInvalidAction)
     async def invalid_action(_request: Request, error: GameInvalidAction) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(error)})
+
+    @application.exception_handler(InvitationNotFound)
+    async def invitation_not_found(
+        _request: Request, error: InvitationNotFound
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(error)})
+
+    @application.exception_handler(InvitationForbidden)
+    async def invitation_forbidden(
+        _request: Request, error: InvitationForbidden
+    ) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(error)})
+
+    @application.exception_handler(InvitationConflict)
+    async def invitation_conflict(
+        _request: Request, error: InvitationConflict
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @application.exception_handler(InvitationInvalid)
+    async def invitation_invalid(
+        _request: Request, error: InvitationInvalid
+    ) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(error)})
 
     @application.exception_handler(PocketBaseError)

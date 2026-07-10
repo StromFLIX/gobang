@@ -16,7 +16,9 @@ import { RouterLink, useRouter } from 'vue-router'
 
 import AvatarImage from '@/components/AvatarImage.vue'
 import AvatarPicker from '@/components/AvatarPicker.vue'
+import InvitationInbox from '@/components/InvitationInbox.vue'
 import LeaderboardPanel from '@/components/LeaderboardPanel.vue'
+import { useInvitations } from '@/composables/useInvitations'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
 import {
@@ -41,6 +43,16 @@ const {
   login,
   logout,
 } = useSession()
+const {
+  invitations,
+  loading: invitationsLoading,
+  error: invitationsError,
+  startInvitationUpdates,
+  stopInvitationUpdates,
+  sendInvitation,
+  acceptInvitation,
+  dismissInvitation,
+} = useInvitations()
 
 const displayName = ref('')
 const avatarSeed = ref<string>(AVATAR_PRESETS[0])
@@ -73,6 +85,11 @@ const visibleOpponentGroups = computed(() =>
 const waitingGames = computed(() =>
   games.value.filter((game) => game.status === 'waiting' && !game.guest),
 )
+const outgoingPendingPlayerIds = computed(() =>
+  invitations.value
+    .filter((invitation) => invitation.challenger.id === player.value?.id)
+    .map((invitation) => invitation.recipient.id),
+)
 const guestGameLabel = computed(() =>
   games.value.length === 1 ? '1 game' : `${games.value.length} games`,
 )
@@ -95,9 +112,52 @@ onMounted(async () => {
   await bootstrapSession()
   profileEditing.value = !profileConfigured.value
   await Promise.all([loadGames(), loadLeaderboard()])
+  if (player.value && !player.value.is_guest) {
+    await startInvitationUpdates(handleInvitationUpdate)
+  }
 })
 
-onBeforeUnmount(clearGameSubscriptions)
+onBeforeUnmount(() => {
+  clearGameSubscriptions()
+  void stopInvitationUpdates()
+})
+
+async function handleInvitationUpdate(invitation: import('@/types/game').Invitation) {
+  if (
+    invitation.status === 'accepted' &&
+    invitation.game_invite_code &&
+    invitation.challenger.id === player.value?.id
+  ) {
+    await router.push(`/game/${invitation.game_invite_code}`)
+  }
+}
+
+async function acceptChallenge(invitationId: string) {
+  try {
+    const invitation = await acceptInvitation(invitationId)
+    if (invitation.game_invite_code) {
+      await router.push(`/game/${invitation.game_invite_code}`)
+    }
+  } catch (error) {
+    pageError.value = error instanceof ApiError ? error.message : 'Could not accept challenge.'
+  }
+}
+
+async function dismissChallenge(invitationId: string) {
+  try {
+    await dismissInvitation(invitationId)
+  } catch (error) {
+    pageError.value = error instanceof ApiError ? error.message : 'Could not dismiss challenge.'
+  }
+}
+
+async function challengePlayer(playerId: string) {
+  try {
+    await sendInvitation(playerId)
+  } catch (error) {
+    pageError.value = error instanceof ApiError ? error.message : 'Could not send challenge.'
+  }
+}
 
 async function loadGames() {
   try {
@@ -266,6 +326,7 @@ async function finishAuth(mergeGuestProgress: boolean) {
         : moved
     }
     await Promise.all([loadGames(), loadLeaderboard()])
+    await startInvitationUpdates(handleInvitationUpdate)
   } catch (error) {
     authError.value = error instanceof ApiError ? error.message : 'Could not sign in.'
   } finally {
@@ -275,6 +336,7 @@ async function finishAuth(mergeGuestProgress: boolean) {
 
 async function signOut() {
   clearGameSubscriptions()
+  await stopInvitationUpdates()
   await logout()
   games.value = []
   profileEditing.value = true
@@ -304,6 +366,15 @@ function groupSummary(group: OpponentGameGroup) {
       </RouterLink>
 
       <div v-if="ready && player" class="account-summary">
+        <InvitationInbox
+          v-if="!player.is_guest"
+          :invitations="invitations"
+          :player-id="player.id"
+          :loading="invitationsLoading"
+          :error="invitationsError"
+          @accept="acceptChallenge"
+          @dismiss="dismissChallenge"
+        />
         <button
           type="button"
           class="account-avatar-button"
@@ -517,7 +588,10 @@ function groupSummary(group: OpponentGameGroup) {
         :player-id="player.id"
         :loading="leaderboardLoading"
         :error="leaderboardError"
+        :can-challenge="!player.is_guest"
+        :pending-player-ids="outgoingPendingPlayerIds"
         @retry="loadLeaderboard"
+        @challenge="challengePlayer"
       />
     </main>
 

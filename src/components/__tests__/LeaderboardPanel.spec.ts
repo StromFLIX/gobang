@@ -98,4 +98,28 @@ describe('LeaderboardPanel', () => {
     expect(wrapper.text()).toContain('Alex')
     expect(wrapper.text()).not.toContain('Sam beat Alex')
   })
+
+  it('only challenges registered opponents and shows pending invitations', async () => {
+    const wrapper = mount(LeaderboardPanel, {
+      props: {
+        leaderboard: leaderboard(),
+        playerId: me.id,
+        loading: false,
+        error: '',
+        canChallenge: true,
+        pendingPlayerIds: [],
+      },
+    })
+
+    const challengeButton = wrapper.get('button[aria-label="Challenge Alex"]')
+    expect(wrapper.find('button[aria-label="Challenge Sam"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Challenge Flo"]').exists()).toBe(false)
+
+    await challengeButton.trigger('click')
+    expect(wrapper.emitted('challenge')).toEqual([[alex.id]])
+
+    await wrapper.setProps({ pendingPlayerIds: [alex.id] })
+    expect(wrapper.find('button[aria-label="Challenge Alex"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Sent')
+  })
 })

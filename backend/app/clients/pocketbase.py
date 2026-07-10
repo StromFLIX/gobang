@@ -59,6 +59,17 @@ class PocketBaseClient:
         )
         return _session_from_auth(data)
 
+    async def get_player(self, player_id: str) -> Player | None:
+        try:
+            record = await self.admin_request(
+                "GET", f"/api/collections/players/records/{player_id}"
+            )
+        except PocketBaseError as error:
+            if error.status_code == 404:
+                return None
+            raise
+        return _player_from_record(record)
+
     async def create_guest(self) -> GuestSession:
         identity = f"guest-{secrets.token_hex(16)}@guest.invalid"
         password = secrets.token_urlsafe(24)

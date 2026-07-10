@@ -85,6 +85,23 @@ export interface Leaderboard {
   results: LeaderboardResult[]
 }
 
+export type InvitationStatus =
+  | 'pending'
+  | 'accepted'
+  | 'dismissed'
+  | 'cancelled'
+  | 'expired'
+
+export interface Invitation {
+  id: string
+  challenger: Player
+  recipient: Player
+  status: InvitationStatus
+  created_at: string
+  expires_at: string
+  game_invite_code: string | null
+}
+
 export interface AuthSession {
   token: string
   player: Player

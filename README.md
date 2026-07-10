@@ -27,6 +27,8 @@ PocketBase data is stored in the `pocketbase_data` volume. Do not remove that vo
 
 The lobby leaderboard ranks players by a current Elo rating calculated from timestamped round results, starting at 1200 with a K-factor of 32. It also shows W-L-D records for the last 7 days or all time. `Against friends` groups the current player's record by opponents they have played, while result history shows who beat whom. Scores created before the timestamped result migration remain in all-time totals but cannot affect Elo or appear in the 7-day view or dated result history.
 
+Registered players can challenge other registered players from the overall leaderboard's `Around you`, `Top 10`, and `All players` views. A challenge is a private pending invitation, not a game: the recipient sees it in the realtime header inbox and may accept or dismiss it, while the sender may cancel it. Acceptance creates the active game and opens it for both players. Pending challenges expire after 24 hours. Anonymous players can still view rankings and play through shared game links, but they cannot send or receive leaderboard challenges.
+
 ## Local development
 
 Run PocketBase with the Compose stack, then run the backend and frontend separately:

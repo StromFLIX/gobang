@@ -7,6 +7,66 @@ async function configurePlayer(page: Page, name: string, glasses: string) {
   await page.getByLabel('Glasses').selectOption(glasses)
 }
 
+async function registerPlayer(page: Page, name: string, email: string) {
+  await configurePlayer(page, name, 'glasses2')
+  await page.getByRole('button', { name: 'Save player' }).click()
+  await page.locator('.account-summary').getByRole('button', { name: 'Sign in' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Create account' }).click()
+  await dialog.getByLabel('Email').fill(email)
+  await dialog.getByLabel('Password', { exact: true }).fill('BrowserPass42!')
+  await dialog.getByLabel('Confirm password').fill('BrowserPass42!')
+  await dialog.locator('form').getByRole('button', { name: 'Create account' }).click()
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+}
+
+test('registered players can challenge from the leaderboard and accept in realtime', async ({
+  browser,
+}) => {
+  const suffix = Date.now()
+  const challengerName = `Challenger ${suffix}`
+  const recipientName = `Recipient ${suffix}`
+  const challengerContext = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const recipientContext = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const challenger = await challengerContext.newPage()
+  const recipient = await recipientContext.newPage()
+
+  await registerPlayer(challenger, challengerName, `challenger-${suffix}@example.com`)
+  await registerPlayer(recipient, recipientName, `recipient-${suffix}@example.com`)
+
+  await challenger.getByRole('button', { name: 'Start game' }).click()
+  await expect(challenger).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
+  await recipient.goto(challenger.url())
+  await expect(challenger.getByText(recipientName, { exact: true })).toBeVisible()
+  await expect(recipient.getByText(challengerName, { exact: true })).toBeVisible()
+
+  await challenger.getByRole('link', { name: 'Back to lobby' }).click()
+  await recipient.getByRole('link', { name: 'Back to lobby' }).click()
+  await challenger.getByRole('button', { name: 'All players' }).click()
+  await challenger.getByRole('button', { name: `Challenge ${recipientName}` }).click()
+  await expect(
+    challenger.getByRole('button', { name: `Challenge ${recipientName}` }),
+  ).toBeHidden()
+
+  await expect(recipient.locator('.invitation-badge')).toHaveText('1')
+  await recipient.getByRole('button', { name: 'Challenges' }).click()
+  await expect(
+    recipient.locator('.invitation-popover').getByText(challengerName, { exact: true }),
+  ).toBeVisible()
+  await recipient
+    .getByRole('button', { name: `Accept ${challengerName}'s challenge` })
+    .click()
+
+  await expect(recipient).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
+  await expect(challenger).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
+  expect(new URL(challenger.url()).pathname).toBe(new URL(recipient.url()).pathname)
+  await expect(challenger.getByText(recipientName, { exact: true })).toBeVisible()
+  await expect(recipient.getByText(challengerName, { exact: true })).toBeVisible()
+
+  await challengerContext.close()
+  await recipientContext.close()
+})
+
 test('two private players receive realtime turn updates', async ({ browser }) => {
   const hostContext = await browser.newContext({ viewport: { width: 1280, height: 900 } })
   const guestContext = await browser.newContext({ viewport: { width: 1280, height: 900 } })

@@ -1,6 +1,6 @@
 import PocketBase, { type RecordModel } from 'pocketbase'
 
-import type { Game, Player, Stone } from '@/types/game'
+import type { Game, Invitation, Player, Stone } from '@/types/game'
 
 const pocketbase = new PocketBase('/pb')
 pocketbase.autoCancellation(false)
@@ -22,6 +22,26 @@ export async function subscribeToGame(
       onGame(gameFromRecord(event.record))
     }
   })
+}
+
+export async function subscribeToInvitations(
+  onChange: (invitation: Invitation) => void,
+): Promise<() => Promise<void>> {
+  return pocketbase.collection('invitations').subscribe('*', (event) => {
+    if (event.action !== 'delete') onChange(invitationFromRecord(event.record))
+  })
+}
+
+function invitationFromRecord(record: RecordModel): Invitation {
+  return {
+    id: record.id,
+    challenger: playerFromRecord(record.challenger_profile),
+    recipient: playerFromRecord(record.recipient_profile),
+    status: record.status,
+    created_at: String(record.created),
+    expires_at: String(record.expires_at),
+    game_invite_code: optionalId(record.game_invite_code),
+  }
 }
 
 function gameFromRecord(record: RecordModel): Game {

@@ -92,6 +92,18 @@ async def test_create_and_join_assigns_sides(service: GameService) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_between_starts_an_accepted_challenge(service: GameService) -> None:
+    game = await service.create_between(HOST, GUEST)
+
+    assert game.status is GameStatus.ACTIVE
+    assert game.host == HOST
+    assert game.guest == GUEST
+    assert game.black_player_id == HOST.id
+    assert game.white_player_id == GUEST.id
+    assert game.revision == 1
+
+
+@pytest.mark.asyncio
 async def test_join_is_idempotent_and_hides_full_room(service: GameService) -> None:
     game = await active_game(service)
 

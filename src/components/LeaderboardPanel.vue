@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RefreshCw, Trophy, Users } from '@lucide/vue'
+import { Check, RefreshCw, Swords, Trophy, Users } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
 import AvatarImage from '@/components/AvatarImage.vue'
@@ -13,20 +13,30 @@ import type {
   PeriodPerformance,
 } from '@/types/game'
 
-const props = defineProps<{
-  leaderboard: Leaderboard | null
-  playerId: string
-  loading: boolean
-  error: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    leaderboard: Leaderboard | null
+    playerId: string
+    loading: boolean
+    error: string
+    canChallenge?: boolean
+    pendingPlayerIds?: string[]
+  }>(),
+  {
+    canChallenge: false,
+    pendingPlayerIds: () => [],
+  },
+)
 
-defineEmits<{ retry: [] }>()
+defineEmits<{ retry: []; challenge: [playerId: string] }>()
 
 type Period = keyof PeriodPerformance
 type View = 'overall' | 'friends'
+type OverallScope = 'nearby' | 'top' | 'all'
 
 const period = ref<Period>('last_7_days')
 const view = ref<View>('overall')
+const overallScope = ref<OverallScope>('nearby')
 
 const overallRows = computed(() =>
   [...(props.leaderboard?.overall ?? [])].sort(
@@ -39,6 +49,15 @@ const overallRows = computed(() =>
       ),
   ),
 )
+
+const visibleOverallRows = computed(() => {
+  if (overallScope.value === 'top') return overallRows.value.slice(0, 10)
+  if (overallScope.value === 'all') return overallRows.value
+  const playerIndex = overallRows.value.findIndex((entry) => entry.player.id === props.playerId)
+  if (playerIndex < 0) return overallRows.value.slice(0, 11)
+  const start = Math.max(0, Math.min(playerIndex - 5, overallRows.value.length - 11))
+  return overallRows.value.slice(start, start + 11)
+})
 
 const friendRows = computed(() =>
   [...(props.leaderboard?.opponents ?? [])].sort((left, right) =>
@@ -92,6 +111,18 @@ function opponentNames(left: HeadToHeadEntry, right: HeadToHeadEntry) {
 
 function selected(entry: LeaderboardEntry | HeadToHeadEntry) {
   return entry.performance[period.value]
+}
+
+function rankFor(entry: LeaderboardEntry) {
+  return overallRows.value.findIndex((row) => row.player.id === entry.player.id) + 1
+}
+
+function canChallengeEntry(entry: LeaderboardEntry) {
+  return (
+    props.canChallenge &&
+    !entry.player.is_guest &&
+    entry.player.id !== props.playerId
+  )
 }
 
 function record(performance: Performance) {
@@ -189,17 +220,29 @@ function resultDate(result: LeaderboardResult) {
       </div>
 
       <div v-if="view === 'overall'" class="standings" role="table" aria-label="Overall standings">
+        <div class="ranking-scope" aria-label="Leaderboard range">
+          <button type="button" :class="{ active: overallScope === 'nearby' }" @click="overallScope = 'nearby'">
+            Around you
+          </button>
+          <button type="button" :class="{ active: overallScope === 'top' }" @click="overallScope = 'top'">
+            Top 10
+          </button>
+          <button type="button" :class="{ active: overallScope === 'all' }" @click="overallScope = 'all'">
+            All players
+          </button>
+        </div>
+        <p v-if="!canChallenge" class="challenge-note">Create an account to challenge ranked players.</p>
         <div class="standings__header" role="row">
-          <span>Rank</span><span>Player</span><span>Elo</span><span>W–L–D</span><span>Win rate</span>
+          <span>Rank</span><span>Player</span><span>Elo</span><span>W–L–D</span><span>Win rate</span><span class="challenge-column">Challenge</span>
         </div>
         <div
-          v-for="(entry, index) in overallRows"
+          v-for="entry in visibleOverallRows"
           :key="entry.player.id"
           class="standing-row"
           :class="{ 'standing-row--current': entry.player.id === playerId }"
           role="row"
         >
-          <strong class="standing-rank">{{ selected(entry).games_played ? index + 1 : '—' }}</strong>
+          <strong class="standing-rank">{{ selected(entry).games_played ? rankFor(entry) : '—' }}</strong>
           <div class="standing-player">
             <AvatarImage :seed="entry.player.avatar_seed" size="small" />
             <div class="standing-player__identity">
@@ -211,6 +254,21 @@ function resultDate(result: LeaderboardResult) {
           <strong class="standing-elo">{{ entry.elo_rating }}</strong>
           <strong class="standing-record">{{ record(selected(entry)) }}</strong>
           <span class="standing-rate">{{ selected(entry).win_rate }}%</span>
+          <span class="challenge-column challenge-action">
+            <span v-if="pendingPlayerIds.includes(entry.player.id)" class="challenge-sent">
+              <Check :size="15" /> Sent
+            </span>
+            <button
+              v-else-if="canChallengeEntry(entry)"
+              type="button"
+              class="icon-button icon-button--muted"
+              :title="`Challenge ${entry.player.display_name}`"
+              :aria-label="`Challenge ${entry.player.display_name}`"
+              @click="$emit('challenge', entry.player.id)"
+            >
+              <Swords :size="17" />
+            </button>
+          </span>
         </div>
       </div>
 
@@ -360,12 +418,63 @@ function resultDate(result: LeaderboardResult) {
   padding: 0.5rem 1.25rem 1.25rem;
 }
 
+.ranking-scope {
+  display: flex;
+  width: fit-content;
+  margin: 0.35rem 0 0.45rem;
+  padding: 0.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-muted);
+}
+
+.ranking-scope button {
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ranking-scope button.active {
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(23, 34, 28, 0.12);
+}
+
+.challenge-note {
+  margin-bottom: 0.3rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+}
+
 .standings__header,
 .standing-row {
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr) 4.5rem 6rem 5rem;
+  grid-template-columns: 3rem minmax(0, 1fr) 4.5rem 6rem 5rem 4.5rem;
   gap: 0.75rem;
   align-items: center;
+}
+
+.challenge-action {
+  display: flex;
+  justify-content: center;
+}
+
+.challenge-action .icon-button {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.challenge-sent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--color-green-dark);
+  font-size: 0.68rem;
+  font-weight: 800;
 }
 
 .standings__header {
@@ -541,6 +650,12 @@ function resultDate(result: LeaderboardResult) {
     width: 100%;
   }
 
+  .ranking-scope {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
   .period-control button {
     flex: 1;
   }
@@ -576,12 +691,25 @@ function resultDate(result: LeaderboardResult) {
 
   .standings__header,
   .standing-row {
-    grid-template-columns: 2rem minmax(0, 1fr) 3.25rem 4.5rem;
+    grid-template-columns: 2rem minmax(0, 1fr) 3.25rem 2.5rem;
   }
 
-  .standings__header span:last-child,
+  .standings__header span:nth-child(4),
+  .standings__header span:nth-child(5),
+  .standing-record,
   .standing-rate {
     display: none;
+  }
+
+  .standings__header .challenge-column {
+    display: block;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .standings__header .challenge-column::after {
+    content: 'Play';
+    font-size: 0.66rem;
   }
 
   .matchup-row {

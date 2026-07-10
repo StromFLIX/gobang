@@ -125,6 +125,30 @@ class GameService:
                 continue
         raise GameConflict("Could not allocate a unique invite code")
 
+    async def create_between(self, host: Player, guest: Player) -> Game:
+        if host.id == guest.id:
+            raise GameInvalidAction("Cannot create a game against yourself")
+        for _ in range(5):
+            game = Game(
+                id="",
+                invite_code=self._create_invite_code(),
+                host=host,
+                guest=guest,
+                status=GameStatus.ACTIVE,
+                revision=1,
+            )
+            if self._choose_host_black():
+                game.black_player_id = host.id
+                game.white_player_id = guest.id
+            else:
+                game.black_player_id = guest.id
+                game.white_player_id = host.id
+            try:
+                return await self._repository.create(game)
+            except GameConflict:
+                continue
+        raise GameConflict("Could not allocate a unique invite code")
+
     async def join(self, invite_code: str, player: Player) -> Game:
         async with self._lock(f"invite:{invite_code}"):
             game = await self._repository.get_by_invite(invite_code)

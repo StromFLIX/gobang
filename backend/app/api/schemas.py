@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr, Field, StringConstraints
 
 from app.clients.pocketbase import GuestSession, PlayerSession
 from app.domain.game import Game, GameStatus, Move, Player
+from app.domain.invitation import Invitation, InvitationStatus
 from app.domain.rules import Stone
 from app.services.games import (
     HeadToHeadEntry,
@@ -94,6 +95,34 @@ class RegisterRequest(LoginRequest):
 class ProfileRequest(BaseModel):
     display_name: DisplayName
     avatar_seed: AvatarSeed
+
+
+class ChallengeRequest(BaseModel):
+    player_id: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=32)
+    ]
+
+
+class InvitationResponse(BaseModel):
+    id: str
+    challenger: PlayerResponse
+    recipient: PlayerResponse
+    status: InvitationStatus
+    created_at: datetime
+    expires_at: datetime
+    game_invite_code: str | None
+
+    @classmethod
+    def from_domain(cls, invitation: Invitation) -> "InvitationResponse":
+        return cls(
+            id=invitation.id,
+            challenger=PlayerResponse.from_domain(invitation.challenger),
+            recipient=PlayerResponse.from_domain(invitation.recipient),
+            status=invitation.status,
+            created_at=invitation.created_at,
+            expires_at=invitation.expires_at,
+            game_invite_code=invitation.game_invite_code,
+        )
 
 
 class MoveResponse(BaseModel):
