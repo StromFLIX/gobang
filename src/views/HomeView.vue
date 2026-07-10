@@ -300,7 +300,6 @@ function groupSummary(group: OpponentGameGroup) {
   <div class="app-shell">
     <header class="app-header">
       <RouterLink to="/" class="brand-mark" aria-label="Gobang home">
-        <Grid3X3 :size="22" />
         <strong>Gobang</strong>
       </RouterLink>
 
@@ -312,7 +311,7 @@ function groupSummary(group: OpponentGameGroup) {
           aria-label="Edit player"
           @click="editProfile"
         >
-          <AvatarImage :seed="player.avatar_seed" size="small" />
+          <AvatarImage :seed="player.avatar_seed" size="medium" />
         </button>
         <span class="account-summary__identity">
           <strong class="account-summary__name">{{ player.display_name }}</strong>
@@ -321,7 +320,7 @@ function groupSummary(group: OpponentGameGroup) {
         <button
           v-if="player.is_guest"
           type="button"
-          class="button button--quiet"
+          class="button button--quiet header-auth-button"
           @click="openAuth('login')"
         >
           <LogIn :size="17" />
@@ -330,12 +329,13 @@ function groupSummary(group: OpponentGameGroup) {
         <button
           v-else
           type="button"
-          class="icon-button icon-button--muted"
+          class="button button--quiet header-auth-button"
           title="Sign out"
           aria-label="Sign out"
           @click="signOut"
         >
           <LogOut :size="18" />
+          Sign out
         </button>
       </div>
     </header>

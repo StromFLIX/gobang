@@ -17,7 +17,7 @@
   min-height: var(--header-height);
   align-items: center;
   justify-content: space-between;
-  padding: 0.65rem max(1rem, env(safe-area-inset-right)) 0.65rem max(1rem, env(safe-area-inset-left));
+  padding: 0.55rem max(1rem, env(safe-area-inset-right)) 0.55rem max(1rem, env(safe-area-inset-left));
   border-bottom: 1px solid var(--color-border);
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(12px);
@@ -25,13 +25,20 @@
 
 .brand-mark {
   display: inline-flex;
+  min-height: 2.5rem;
   align-items: center;
-  gap: 0.55rem;
-  font-size: 1.05rem;
+  gap: 0.35rem;
+  font-size: 1rem;
+  font-weight: 800;
 }
 
 .brand-mark svg {
   color: var(--color-green);
+}
+
+.brand-mark--back {
+  margin-left: -0.35rem;
+  padding-right: 0.35rem;
 }
 
 .account-summary,
@@ -53,11 +60,18 @@
 
 .account-avatar-button {
   display: inline-grid;
+  width: 2.5rem;
+  height: 2.5rem;
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
   cursor: pointer;
+}
+
+.button.header-auth-button {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.75rem;
 }
 
 .account-avatar-button:focus-visible {
@@ -593,9 +607,7 @@
 }
 
 .game-header {
-  display: grid;
-  grid-template-columns: 2.6rem auto 1fr;
-  gap: 0.6rem;
+  display: flex;
 }
 
 .game-header__actions {
@@ -606,6 +618,16 @@
   color: var(--color-text-muted);
   font-size: 0.75rem;
   font-weight: 800;
+}
+
+.game-header .connection-pill {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.65rem;
+}
+
+.game-header .icon-button {
+  width: 2.5rem;
+  height: 2.5rem;
 }
 
 .connection-pill--live {
@@ -879,30 +901,8 @@
 }
 
 @media (max-width: 430px) {
-  .brand-mark strong {
-    font-size: 0.95rem;
-  }
-
-  .connection-pill {
-    width: 2.35rem;
-    height: 2.35rem;
-    justify-content: center;
-    padding: 0;
-    font-size: 0;
-  }
-
-  .game-header {
-    grid-template-columns: 2.4rem auto 1fr;
-  }
-
   .game-header__actions {
     gap: 0.35rem;
-  }
-
-  .game-header .icon-button,
-  .game-header > .icon-button {
-    width: 2.35rem;
-    height: 2.35rem;
   }
 
   .game-list-item {

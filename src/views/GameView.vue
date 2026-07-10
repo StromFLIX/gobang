@@ -269,11 +269,8 @@ function stoneFor(playerId: string): Stone | null {
 <template>
   <div class="app-shell game-shell">
     <header class="app-header game-header">
-      <RouterLink to="/" class="icon-button icon-button--muted" aria-label="Back to lobby" title="Lobby">
+      <RouterLink to="/" class="brand-mark brand-mark--back" aria-label="Back to lobby" title="Back to lobby">
         <ChevronLeft :size="20" />
-      </RouterLink>
-      <RouterLink to="/" class="brand-mark" aria-label="Gobang home">
-        <Grid3X3 :size="21" />
         <strong>Gobang</strong>
       </RouterLink>
       <div class="game-header__actions">

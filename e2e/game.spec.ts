@@ -65,6 +65,11 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   const page = await context.newPage()
 
   await configurePlayer(page, 'Mobile player', 'sunglasses')
+  const accountAvatarBox = await page.getByRole('button', { name: 'Edit player' }).boundingBox()
+  const signInBox = await page.getByRole('button', { name: 'Sign in' }).boundingBox()
+  expect(accountAvatarBox).not.toBeNull()
+  expect(signInBox).not.toBeNull()
+  expect(Math.abs(accountAvatarBox!.height - signInBox!.height)).toBeLessThanOrEqual(1)
   await page.getByRole('button', { name: 'Save player' }).click()
   await expect(page.locator('.profile-tool')).toBeHidden()
   await page.getByRole('button', { name: 'Edit player' }).click()
@@ -80,6 +85,15 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
 
   await page.getByRole('button', { name: 'Start game' }).click()
   await expect(page).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
+  await expect(page.locator('.connection-pill')).toContainText('live')
+  const liveBox = await page.locator('.connection-pill').boundingBox()
+  const shareBox = await page
+    .locator('.game-header')
+    .getByRole('button', { name: 'Share game' })
+    .boundingBox()
+  expect(liveBox).not.toBeNull()
+  expect(shareBox).not.toBeNull()
+  expect(Math.abs(liveBox!.height - shareBox!.height)).toBeLessThanOrEqual(1)
   const board = page.getByRole('grid', { name: 'Gobang board' })
   await expect(board).toBeVisible()
   await expect(page.getByRole('button', { name: 'Confirm selected move' })).toBeVisible()
