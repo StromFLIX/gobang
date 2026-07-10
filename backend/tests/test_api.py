@@ -8,6 +8,7 @@ from app.clients.pocketbase import GuestSession, PlayerSession, PocketBaseError
 from app.config import Settings
 from app.domain.game import Game, Player
 from app.domain.invitation import Invitation, InvitationStatus
+from app.domain.matchmaking import MatchmakingStatus, MatchmakingTicket
 from app.domain.reaction import GameReaction
 from app.main import create_app
 from app.services.games import GameConflict
@@ -93,6 +94,39 @@ class MemoryReactionRepository:
         return deepcopy(stored)
 
 
+class MemoryMatchmakingRepository:
+    def __init__(self) -> None:
+        self.tickets: dict[str, MatchmakingTicket] = {}
+
+    async def create(self, ticket: MatchmakingTicket) -> MatchmakingTicket:
+        stored = replace(ticket, id=f"ticket-{len(self.tickets) + 1}")
+        self.tickets[stored.id] = deepcopy(stored)
+        return deepcopy(stored)
+
+    async def get_open_for_player(self, player_id: str) -> MatchmakingTicket | None:
+        return next(
+            (
+                deepcopy(ticket)
+                for ticket in reversed(self.tickets.values())
+                if ticket.player.id == player_id
+                and ticket.status
+                in {MatchmakingStatus.WAITING, MatchmakingStatus.MATCHED}
+            ),
+            None,
+        )
+
+    async def list_waiting(self) -> Sequence[MatchmakingTicket]:
+        return [
+            deepcopy(ticket)
+            for ticket in self.tickets.values()
+            if ticket.status is MatchmakingStatus.WAITING
+        ]
+
+    async def update(self, ticket: MatchmakingTicket) -> MatchmakingTicket:
+        self.tickets[ticket.id] = deepcopy(ticket)
+        return deepcopy(ticket)
+
+
 class FakePocketBase:
     def __init__(self) -> None:
         self.players = {
@@ -143,6 +177,7 @@ class FakePocketBase:
 
 def make_client(
     reaction_repository: MemoryReactionRepository | None = None,
+    matchmaking_repository: MemoryMatchmakingRepository | None = None,
 ) -> TestClient:
     app = create_app(
         settings=Settings(frontend_dist="missing"),
@@ -150,6 +185,9 @@ def make_client(
         repository=MemoryRepository(),
         invitation_repository=MemoryInvitationRepository(),
         reaction_repository=reaction_repository or MemoryReactionRepository(),
+        matchmaking_repository=(
+            matchmaking_repository or MemoryMatchmakingRepository()
+        ),
     )
     return TestClient(app)
 
@@ -300,6 +338,116 @@ def test_game_reactions_are_private_validated_and_upserted() -> None:
         assert second.json()["sender_id"] == "guest"
         assert second.json()["kind"] == "gg"
         assert len(reactions.reactions) == 1
+
+
+def test_registered_players_wait_pair_and_leave_ranked_matchmaking() -> None:
+    tickets = MemoryMatchmakingRepository()
+    with make_client(matchmaking_repository=tickets) as client:
+        guest_attempt = client.post(
+            "/api/matchmaking/join",
+            headers={"Authorization": "Bearer guest-token"},
+        )
+        assert guest_attempt.status_code == 403
+
+        waiting = client.post(
+            "/api/matchmaking/join",
+            headers={"Authorization": "Bearer account-token"},
+        )
+        assert waiting.status_code == 200
+        assert waiting.json()["status"] == "waiting"
+        assert client.post(
+            "/api/matchmaking/join",
+            headers={"Authorization": "Bearer account-token"},
+        ).json()["id"] == waiting.json()["id"]
+        assert client.get(
+            "/api/games", headers={"Authorization": "Bearer account-token"}
+        ).json() == []
+
+        matched_rival = client.post(
+            "/api/matchmaking/join",
+            headers={"Authorization": "Bearer rival-token"},
+        ).json()
+        matched_account = client.get(
+            "/api/matchmaking",
+            headers={"Authorization": "Bearer account-token"},
+        ).json()
+        assert matched_rival["status"] == "matched"
+        assert matched_account["status"] == "matched"
+        assert matched_account["game_invite_code"] == matched_rival["game_invite_code"]
+
+        account_games = client.get(
+            "/api/games", headers={"Authorization": "Bearer account-token"}
+        ).json()
+        assert len(account_games) == 1
+        assert account_games[0]["status"] == "active"
+        assert account_games[0]["guest"]["id"] == "rival"
+
+        assert client.delete(
+            "/api/matchmaking",
+            headers={"Authorization": "Bearer account-token"},
+        ).json()["status"] == "consumed"
+        client.delete(
+            "/api/matchmaking",
+            headers={"Authorization": "Bearer rival-token"},
+        )
+        next_wait = client.post(
+            "/api/matchmaking/join",
+            headers={"Authorization": "Bearer account-token"},
+        ).json()
+        assert next_wait["status"] == "waiting"
+        assert client.delete(
+            "/api/matchmaking",
+            headers={"Authorization": "Bearer account-token"},
+        ).json()["status"] == "cancelled"
+        assert client.get(
+            "/api/matchmaking",
+            headers={"Authorization": "Bearer account-token"},
+        ).json() is None
+
+
+def test_presence_counts_online_players_and_distinct_active_matches() -> None:
+    with make_client() as client:
+        lobby = client.post(
+            "/api/presence/heartbeat",
+            headers={"Authorization": "Bearer third-token"},
+            json={"game_id": None},
+        )
+        assert lobby.json() == {
+            "online_players": 1,
+            "playing_players": 0,
+            "active_matches": 0,
+        }
+
+        created = client.post(
+            "/api/games", headers={"Authorization": "Bearer account-token"}
+        ).json()
+        game = client.post(
+            "/api/games/join",
+            headers={"Authorization": "Bearer rival-token"},
+            json={"invite_code": created["invite_code"]},
+        ).json()
+        outsider = client.post(
+            "/api/presence/heartbeat",
+            headers={"Authorization": "Bearer third-token"},
+            json={"game_id": game["id"]},
+        )
+        assert outsider.status_code == 404
+
+        client.post(
+            "/api/presence/heartbeat",
+            headers={"Authorization": "Bearer account-token"},
+            json={"game_id": game["id"]},
+        )
+        playing = client.post(
+            "/api/presence/heartbeat",
+            headers={"Authorization": "Bearer rival-token"},
+            json={"game_id": game["id"]},
+        )
+        assert playing.json() == {
+            "online_players": 3,
+            "playing_players": 2,
+            "active_matches": 1,
+        }
 
 
 def test_private_room_turn_and_revision_protection() -> None:

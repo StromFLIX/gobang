@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr, Field, StringConstraints
 from app.clients.pocketbase import GuestSession, PlayerSession
 from app.domain.game import Game, GameStatus, Move, Player
 from app.domain.invitation import Invitation, InvitationStatus
+from app.domain.matchmaking import MatchmakingStatus, MatchmakingTicket
 from app.domain.reaction import GameReaction, ReactionKind
 from app.domain.rules import Stone
 from app.services.games import (
@@ -17,6 +18,7 @@ from app.services.games import (
     PeriodPerformance,
     PlayerMerge,
 )
+from app.services.presence import PresenceStats
 
 DisplayName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=24)]
 AvatarSeed = Annotated[
@@ -98,6 +100,24 @@ class ProfileRequest(BaseModel):
     avatar_seed: AvatarSeed
 
 
+class PresenceHeartbeatRequest(BaseModel):
+    game_id: str | None = None
+
+
+class PresenceStatsResponse(BaseModel):
+    online_players: int
+    playing_players: int
+    active_matches: int
+
+    @classmethod
+    def from_domain(cls, stats: PresenceStats) -> "PresenceStatsResponse":
+        return cls(
+            online_players=stats.online_players,
+            playing_players=stats.playing_players,
+            active_matches=stats.active_matches,
+        )
+
+
 class ReactionRequest(BaseModel):
     kind: ReactionKind
 
@@ -145,6 +165,24 @@ class InvitationResponse(BaseModel):
             created_at=invitation.created_at,
             expires_at=invitation.expires_at,
             game_invite_code=invitation.game_invite_code,
+        )
+
+
+class MatchmakingTicketResponse(BaseModel):
+    id: str
+    status: MatchmakingStatus
+    created_at: datetime
+    expires_at: datetime
+    game_invite_code: str | None
+
+    @classmethod
+    def from_domain(cls, ticket: MatchmakingTicket) -> "MatchmakingTicketResponse":
+        return cls(
+            id=ticket.id,
+            status=ticket.status,
+            created_at=ticket.created_at,
+            expires_at=ticket.expires_at,
+            game_invite_code=ticket.game_invite_code,
         )
 
 

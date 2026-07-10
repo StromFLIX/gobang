@@ -8,6 +8,10 @@ import {
   LogIn,
   LogOut,
   Plus,
+  Radio,
+  Search,
+  Swords,
+  Timer,
   Users,
   X,
 } from '@lucide/vue'
@@ -19,6 +23,7 @@ import AvatarPicker from '@/components/AvatarPicker.vue'
 import InvitationInbox from '@/components/InvitationInbox.vue'
 import LeaderboardPanel from '@/components/LeaderboardPanel.vue'
 import { useInvitations } from '@/composables/useInvitations'
+import { usePresence } from '@/composables/usePresence'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
 import {
@@ -30,7 +35,7 @@ import {
 } from '@/logic/games'
 import { ApiError, api } from '@/services/api'
 import { subscribeToGame } from '@/services/pocketbase'
-import type { Game, Leaderboard } from '@/types/game'
+import type { Game, Leaderboard, MatchmakingTicket } from '@/types/game'
 
 const router = useRouter()
 const {
@@ -53,6 +58,11 @@ const {
   acceptInvitation,
   dismissInvitation,
 } = useInvitations()
+const {
+  stats: presenceStats,
+  heartbeat: presenceHeartbeat,
+  startPresence,
+} = usePresence()
 
 const displayName = ref('')
 const avatarSeed = ref<string>(AVATAR_PRESETS[0])
@@ -74,7 +84,16 @@ const mergeNotice = ref('')
 const profileEditing = ref(true)
 const profileSaving = ref(false)
 const showAllOpponents = ref(false)
+const matchmakingOpen = ref(false)
+const matchmakingTicket = ref<MatchmakingTicket | null>(null)
+const matchmakingError = ref('')
+const matchmakingBusy = ref(false)
+const matchmakingElapsed = ref(0)
 let gameUnsubscribes: (() => Promise<void>)[] = []
+let matchmakingPollTimer: ReturnType<typeof setInterval> | null = null
+let matchmakingElapsedTimer: ReturnType<typeof setInterval> | null = null
+let matchmakingPollBusy = false
+let matchmakingNavigating = false
 
 const opponentGroups = computed(() =>
   player.value ? groupGamesByOpponent(games.value, player.value.id) : [],
@@ -97,6 +116,11 @@ const authTitle = computed(() => {
   if (mergePrompt.value) return 'Keep your current games?'
   return authMode.value === 'register' ? 'Create account' : 'Sign in'
 })
+const matchmakingElapsedLabel = computed(() => {
+  const minutes = Math.floor(matchmakingElapsed.value / 60)
+  const seconds = matchmakingElapsed.value % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+})
 
 watch(
   player,
@@ -110,15 +134,20 @@ watch(
 
 onMounted(async () => {
   await bootstrapSession()
+  startPresence()
   profileEditing.value = !profileConfigured.value
   await Promise.all([loadGames(), loadLeaderboard()])
   if (player.value && !player.value.is_guest) {
-    await startInvitationUpdates(handleInvitationUpdate)
+    await Promise.all([
+      startInvitationUpdates(handleInvitationUpdate),
+      restoreMatchmaking(),
+    ])
   }
 })
 
 onBeforeUnmount(() => {
   clearGameSubscriptions()
+  stopMatchmakingTimers()
   void stopInvitationUpdates()
 })
 
@@ -263,6 +292,125 @@ async function startGame() {
   }
 }
 
+async function startRankedMatchmaking() {
+  if (player.value?.is_guest) {
+    openAuth('register')
+    return
+  }
+  if (matchmakingBusy.value || !(await ensureProfile())) return
+  matchmakingBusy.value = true
+  matchmakingOpen.value = true
+  matchmakingError.value = ''
+  try {
+    const ticket = await api.joinMatchmaking()
+    matchmakingTicket.value = ticket
+    if (ticket.game_invite_code) await openMatchedGame(ticket)
+    else startMatchmakingTimers()
+  } catch (error) {
+    matchmakingError.value =
+      error instanceof ApiError ? error.message : 'Could not start matchmaking.'
+  } finally {
+    matchmakingBusy.value = false
+  }
+}
+
+async function restoreMatchmaking() {
+  try {
+    const ticket = await api.getMatchmakingTicket()
+    if (!ticket) return
+    matchmakingTicket.value = ticket
+    matchmakingOpen.value = true
+    if (ticket.game_invite_code) await openMatchedGame(ticket)
+    else startMatchmakingTimers()
+  } catch {
+    // A stale queue should not block the rest of the lobby.
+  }
+}
+
+function startMatchmakingTimers() {
+  stopMatchmakingTimers()
+  syncMatchmakingElapsed()
+  matchmakingElapsedTimer = setInterval(syncMatchmakingElapsed, 1_000)
+  matchmakingPollTimer = setInterval(() => void pollMatchmaking(), 1_500)
+}
+
+function stopMatchmakingTimers() {
+  if (matchmakingPollTimer) clearInterval(matchmakingPollTimer)
+  if (matchmakingElapsedTimer) clearInterval(matchmakingElapsedTimer)
+  matchmakingPollTimer = null
+  matchmakingElapsedTimer = null
+}
+
+function syncMatchmakingElapsed() {
+  const createdAt = matchmakingTicket.value?.created_at
+  matchmakingElapsed.value = createdAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 1_000))
+    : 0
+}
+
+async function pollMatchmaking() {
+  if (matchmakingPollBusy || matchmakingNavigating) return
+  matchmakingPollBusy = true
+  try {
+    const ticket = await api.getMatchmakingTicket()
+    if (!ticket) {
+      matchmakingTicket.value = null
+      matchmakingError.value = 'The search expired. Start a new search.'
+      stopMatchmakingTimers()
+      return
+    }
+    matchmakingError.value = ''
+    matchmakingTicket.value = ticket
+    if (ticket.game_invite_code) await openMatchedGame(ticket)
+  } catch {
+    matchmakingError.value = 'Connection lost. Matchmaking is still running.'
+  } finally {
+    matchmakingPollBusy = false
+  }
+}
+
+async function openMatchedGame(ticket: MatchmakingTicket, acknowledge = true) {
+  if (!ticket.game_invite_code || matchmakingNavigating) return
+  matchmakingNavigating = true
+  stopMatchmakingTimers()
+  try {
+    if (acknowledge) {
+      try {
+        await api.leaveMatchmaking()
+      } catch {
+        // The game code is sufficient even if ticket acknowledgement is interrupted.
+      }
+    }
+    matchmakingOpen.value = false
+    await router.push(`/game/${ticket.game_invite_code}`)
+  } finally {
+    matchmakingNavigating = false
+  }
+}
+
+async function cancelMatchmaking() {
+  if (matchmakingBusy.value) return
+  matchmakingBusy.value = true
+  matchmakingError.value = ''
+  stopMatchmakingTimers()
+  try {
+    const ticket = await api.leaveMatchmaking()
+    matchmakingTicket.value = ticket
+    if (ticket?.game_invite_code) {
+      await openMatchedGame(ticket, false)
+      return
+    }
+    matchmakingOpen.value = false
+    matchmakingTicket.value = null
+  } catch (error) {
+    matchmakingError.value =
+      error instanceof ApiError ? error.message : 'Could not cancel matchmaking.'
+    startMatchmakingTimers()
+  } finally {
+    matchmakingBusy.value = false
+  }
+}
+
 function normalizedInviteCode() {
   const value = inviteCode.value.trim()
   const match = value.match(/\/game\/([^/?#]+)/)
@@ -327,6 +475,8 @@ async function finishAuth(mergeGuestProgress: boolean) {
     }
     await Promise.all([loadGames(), loadLeaderboard()])
     await startInvitationUpdates(handleInvitationUpdate)
+    await presenceHeartbeat()
+    await restoreMatchmaking()
   } catch (error) {
     authError.value = error instanceof ApiError ? error.message : 'Could not sign in.'
   } finally {
@@ -336,11 +486,21 @@ async function finishAuth(mergeGuestProgress: boolean) {
 
 async function signOut() {
   clearGameSubscriptions()
+  stopMatchmakingTimers()
   await stopInvitationUpdates()
+  if (!player.value?.is_guest) {
+    try {
+      await api.leaveMatchmaking()
+    } catch {
+      // Signing out can continue if queue cleanup is unavailable.
+    }
+  }
+  matchmakingOpen.value = false
+  matchmakingTicket.value = null
   await logout()
   games.value = []
   profileEditing.value = true
-  await loadLeaderboard()
+  await Promise.all([loadLeaderboard(), presenceHeartbeat()])
 }
 
 function gameFor(group: OpponentGameGroup) {
@@ -542,6 +702,50 @@ function groupSummary(group: OpponentGameGroup) {
         </button>
       </div>
 
+      <section class="room-tool ranked-tool" aria-labelledby="ranked-tool-title">
+        <div class="section-heading-row">
+          <div>
+            <p class="section-kicker">Ranked</p>
+            <h2 id="ranked-tool-title">Play someone online</h2>
+          </div>
+          <span v-if="!player.is_guest && leaderboard" class="session-badge ranked-rating">
+            <Swords :size="13" />
+            {{ leaderboard.player.elo_rating }} Elo
+          </span>
+        </div>
+
+        <div class="ranked-population" aria-label="Approximate live population">
+          <span>
+            <Radio :size="17" />
+            <strong>{{ presenceStats?.online_players ?? '...' }}</strong>
+            online
+          </span>
+          <span>
+            <Users :size="17" />
+            <strong>{{ presenceStats?.playing_players ?? '...' }}</strong>
+            playing
+          </span>
+          <span>
+            <Grid3X3 :size="17" />
+            <strong>{{ presenceStats?.active_matches ?? '...' }}</strong>
+            matches
+          </span>
+        </div>
+
+        <button
+          type="button"
+          class="button button--primary ranked-search-button"
+          :disabled="matchmakingBusy || matchmakingOpen"
+          @click="startRankedMatchmaking"
+        >
+          <Search :size="20" />
+          {{ player.is_guest ? 'Create account to play ranked' : 'Find ranked match' }}
+        </button>
+        <p class="ranked-note">
+          {{ player.is_guest ? 'Ranked play requires an account.' : 'Matched games affect your Elo rating.' }}
+        </p>
+      </section>
+
       <section class="room-tool game-tool" aria-labelledby="game-tool-title">
         <div class="section-heading-row">
           <div>
@@ -599,6 +803,65 @@ function groupSummary(group: OpponentGameGroup) {
       <span class="loading-mark"><Grid3X3 :size="28" /></span>
       <p>Opening your player…</p>
     </main>
+
+    <div v-if="matchmakingOpen" class="modal-backdrop">
+      <section
+        class="auth-dialog matchmaking-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="matchmaking-title"
+      >
+        <div class="dialog-header">
+          <div>
+            <p class="section-kicker">Ranked lobby</p>
+            <h2 id="matchmaking-title">Finding your opponent</h2>
+          </div>
+          <button
+            type="button"
+            class="icon-button icon-button--muted"
+            :disabled="matchmakingBusy"
+            title="Cancel search"
+            aria-label="Cancel search"
+            @click="cancelMatchmaking"
+          >
+            <X :size="19" />
+          </button>
+        </div>
+
+        <div class="matchmaking-signal" aria-hidden="true">
+          <span class="matchmaking-signal__ring" />
+          <span class="matchmaking-signal__ring matchmaking-signal__ring--late" />
+          <Search :size="26" />
+        </div>
+
+        <div class="matchmaking-clock" aria-live="polite">
+          <Timer :size="18" />
+          <time>{{ matchmakingElapsedLabel }}</time>
+        </div>
+        <p class="matchmaking-status">
+          {{ matchmakingError || 'Searching the ranked queue…' }}
+        </p>
+
+        <button
+          v-if="!matchmakingTicket"
+          type="button"
+          class="button button--primary"
+          :disabled="matchmakingBusy"
+          @click="startRankedMatchmaking"
+        >
+          <Search :size="18" />
+          Search again
+        </button>
+        <button
+          type="button"
+          class="button button--secondary"
+          :disabled="matchmakingBusy"
+          @click="cancelMatchmaking"
+        >
+          Cancel search
+        </button>
+      </section>
+    </div>
 
     <div v-if="authOpen" class="modal-backdrop" @click.self="authOpen = false">
       <section class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title">

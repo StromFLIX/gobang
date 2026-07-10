@@ -22,6 +22,7 @@ import GridComponent from '@/components/GridComponent.vue'
 import InvitationInbox from '@/components/InvitationInbox.vue'
 import ReactionBar from '@/components/ReactionBar.vue'
 import { useInvitations } from '@/composables/useInvitations'
+import { usePresence } from '@/composables/usePresence'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
 import { shortPlayerId } from '@/logic/games'
@@ -60,6 +61,9 @@ const accountError = ref('')
 const accountSaving = ref(false)
 const incomingReaction = ref<GameReaction | null>(null)
 const reactionPending = ref(false)
+const { heartbeat: presenceHeartbeat, startPresence } = usePresence(() =>
+  game.value?.status === 'active' ? game.value.id : null,
+)
 let unsubscribe: (() => Promise<void>) | null = null
 let reactionUnsubscribe: (() => Promise<void>) | null = null
 let reactionTimer: ReturnType<typeof setTimeout> | null = null
@@ -149,6 +153,7 @@ watch(
 
 onMounted(async () => {
   await bootstrapSession()
+  startPresence()
   if (player.value) {
     displayName.value = player.value.display_name === 'Player' ? '' : player.value.display_name
     avatarSeed.value = player.value.avatar_seed || AVATAR_PRESETS[0]
@@ -231,6 +236,7 @@ async function joinRoom() {
   try {
     game.value = await api.joinGame(inviteCode.value)
     await startSubscription()
+    await presenceHeartbeat()
     connection.value = navigator.onLine ? 'live' : 'offline'
   } catch (error) {
     pageError.value =
@@ -252,7 +258,9 @@ async function startSubscription() {
   if (!game.value) return
   ;[unsubscribe, reactionUnsubscribe] = await Promise.all([
     subscribeToGame(game.value.id, (nextGame) => {
+      const statusChanged = game.value?.status !== nextGame.status
       if (!game.value || nextGame.revision >= game.value.revision) game.value = nextGame
+      if (statusChanged) void presenceHeartbeat()
       connection.value = 'live'
     }),
     subscribeToGameReactions(game.value.id, showReaction),

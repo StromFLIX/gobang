@@ -1,6 +1,6 @@
 # Gobang
 
-A private realtime two-player Gobang game with pair captures. Five or more stones in a row wins; captures remove bracketed pairs but do not win the game by themselves. Captured intersections are blocked for the immediately following move, then become available again.
+A realtime two-player Gobang game with private links and ranked matchmaking. Five or more stones in a row wins; captures remove bracketed pairs but do not win the game by themselves. Captured intersections are blocked for the immediately following move, then become available again.
 
 Players in a joined game can send preset quick reactions below the board: Wow, +1, Shit, Mind blown, Facepalm, Heart, and GG. A reaction pops up and fades on the opponent's screen. Reactions are participant-private and reuse one realtime record per game, so they do not create chat history or affect game revisions.
 
@@ -30,6 +30,10 @@ PocketBase data is stored in the `pocketbase_data` volume. Do not remove that vo
 The lobby leaderboard ranks players by a current Elo rating calculated from timestamped round results, starting at 1200 with a K-factor of 32. It also shows W-L-D records for the last 7 days or all time. `Against friends` groups the current player's record by opponents they have played, while result history shows who beat whom. Scores created before the timestamped result migration remain in all-time totals but cannot affect Elo or appear in the 7-day view or dated result history.
 
 Registered players can challenge other registered players from the overall leaderboard's `Around you`, `Top 10`, and `All players` views. A challenge is a private pending invitation, not a game: the recipient sees it in the realtime header inbox and may accept or dismiss it, while the sender may cancel it. Acceptance creates the active game and opens it for both players. Pending challenges expire after 24 hours. Anonymous players can still view rankings and play through shared game links, but they cannot send or receive leaderboard challenges.
+
+Registered players can also enter the public ranked queue. The backend pairs waiting accounts in FIFO order, creates one active game, and sends both browsers to the same board. Search state survives a page refresh, may be cancelled, and expires after 10 minutes. Ranked games use the same Elo scoring as direct games. Guests are prompted to create an account before joining the queue.
+
+The lobby's online, playing, and active-match counters are intentionally approximate. Browsers send an in-memory heartbeat every 20 seconds and disappear from the counters after 45 seconds without one. Presence writes no PocketBase records and does not affect game state.
 
 ## Local development
 
@@ -98,4 +102,4 @@ Email verification and password reset are not enabled in this version, so losing
 
 PocketBase stores its database and uploaded data under `/pb/pb_data`. Back up the named volume while PocketBase is stopped, or use PocketBase's backup API from a private administrative connection.
 
-The app intentionally runs one FastAPI worker. Game locks are process-local and pair with record revisions to serialize moves. Do not horizontally scale the `app` service without first adding a distributed lock or an atomic database compare-and-swap operation.
+The app intentionally runs one FastAPI worker. Game and matchmaking locks are process-local, while approximate presence is held in that worker's memory. Game locks pair with record revisions to serialize moves. Do not horizontally scale the `app` service without first adding distributed coordination, shared presence, and an atomic database compare-and-swap operation.

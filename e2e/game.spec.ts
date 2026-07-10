@@ -20,6 +20,58 @@ async function registerPlayer(page: Page, name: string, email: string) {
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 }
 
+async function authenticatedGames(page: Page) {
+  return page.evaluate(async () => {
+    const session = JSON.parse(localStorage.getItem('gobang.session.v1') ?? '{}') as {
+      token?: string
+    }
+    const response = await fetch('/api/games', {
+      headers: { Authorization: `Bearer ${session.token ?? ''}` },
+    })
+    return (await response.json()) as { id: string; status: string }[]
+  })
+}
+
+test('ranked matchmaking waits, cancels, and pairs two accounts once', async ({
+  browser,
+}) => {
+  const suffix = Date.now()
+  const firstName = `Ranked one ${suffix}`
+  const secondName = `Ranked two ${suffix}`
+  const firstContext = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const secondContext = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const first = await firstContext.newPage()
+  const second = await secondContext.newPage()
+
+  await registerPlayer(first, firstName, `ranked-one-${suffix}@example.com`)
+  await registerPlayer(second, secondName, `ranked-two-${suffix}@example.com`)
+
+  await first.getByRole('button', { name: 'Find ranked match' }).click()
+  const firstSearch = first.getByRole('dialog', { name: 'Finding your opponent' })
+  await expect(firstSearch).toBeVisible()
+  await expect(firstSearch.locator('time')).toHaveText(/00:0[0-9]/)
+  expect(await authenticatedGames(first)).toHaveLength(0)
+
+  await firstSearch.getByRole('button', { name: 'Cancel search', exact: true }).last().click()
+  await expect(firstSearch).toBeHidden()
+  expect(await authenticatedGames(first)).toHaveLength(0)
+
+  await first.getByRole('button', { name: 'Find ranked match' }).click()
+  await expect(firstSearch).toBeVisible()
+  await second.getByRole('button', { name: 'Find ranked match' }).click()
+
+  await expect(first).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/, { timeout: 10_000 })
+  await expect(second).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/, { timeout: 10_000 })
+  expect(new URL(first.url()).pathname).toBe(new URL(second.url()).pathname)
+  await expect(first.getByText(secondName, { exact: true })).toBeVisible()
+  await expect(second.getByText(firstName, { exact: true })).toBeVisible()
+  expect(await authenticatedGames(first)).toHaveLength(1)
+  expect((await authenticatedGames(first))[0].status).toBe('active')
+
+  await firstContext.close()
+  await secondContext.close()
+})
+
 test('registered players can challenge from the leaderboard and accept in realtime', async ({
   browser,
 }) => {

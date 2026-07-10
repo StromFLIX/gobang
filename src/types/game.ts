@@ -102,6 +102,27 @@ export interface Invitation {
   game_invite_code: string | null
 }
 
+export type MatchmakingStatus =
+  | 'waiting'
+  | 'matched'
+  | 'consumed'
+  | 'cancelled'
+  | 'expired'
+
+export interface MatchmakingTicket {
+  id: string
+  status: MatchmakingStatus
+  created_at: string
+  expires_at: string
+  game_invite_code: string | null
+}
+
+export interface PresenceStats {
+  online_players: number
+  playing_players: number
+  active_matches: number
+}
+
 export type ReactionKind =
   | 'wow'
   | 'plus_one'

@@ -217,6 +217,7 @@
 }
 
 .profile-tool--editor,
+.ranked-tool,
 .game-tool,
 .account-nudge,
 .merge-notice {
@@ -300,6 +301,80 @@
   min-height: 3.5rem;
   margin-top: auto;
   font-size: 1rem;
+}
+
+.ranked-tool {
+  position: relative;
+  overflow: hidden;
+  border-color: #aac3b3;
+  background:
+    linear-gradient(90deg, rgba(36, 102, 70, 0.06) 1px, transparent 1px),
+    var(--color-surface);
+  background-size: 32px 32px;
+}
+
+.ranked-tool::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0.35rem;
+  height: 100%;
+  content: '';
+  background: var(--color-yellow);
+}
+
+.ranked-rating {
+  color: var(--color-green-dark);
+  background: #e1eee6;
+}
+
+.ranked-population {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1rem;
+  border-block: 1px solid var(--color-border);
+}
+
+.ranked-population span {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  align-items: center;
+  column-gap: 0.4rem;
+  padding: 0.75rem 0.55rem;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ranked-population span + span {
+  border-left: 1px solid var(--color-border);
+}
+
+.ranked-population svg {
+  grid-row: 1 / 3;
+  color: var(--color-green);
+}
+
+.ranked-population strong {
+  color: var(--color-text);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.ranked-search-button {
+  width: 100%;
+  min-height: 3.5rem;
+  font-size: 1rem;
+}
+
+.ranked-note {
+  margin-top: 0.55rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  text-align: center;
 }
 
 .join-divider {
@@ -524,6 +599,75 @@
   width: min(100%, 28rem);
   padding: 1.25rem;
   box-shadow: 0 24px 70px rgba(14, 25, 18, 0.28);
+}
+
+.matchmaking-dialog {
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  text-align: center;
+}
+
+.matchmaking-dialog .dialog-header {
+  text-align: left;
+}
+
+.matchmaking-signal {
+  position: relative;
+  display: grid;
+  width: 7.5rem;
+  height: 7.5rem;
+  place-items: center;
+  align-self: center;
+  margin: 0.5rem 0 1rem;
+  border: 1px solid #b9cebf;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--color-green);
+}
+
+.matchmaking-signal__ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 2px solid rgba(36, 102, 70, 0.35);
+  border-radius: 50%;
+  animation: matchmaking-pulse 2.4s ease-out infinite;
+}
+
+.matchmaking-signal__ring--late {
+  animation-delay: 1.2s;
+}
+
+@keyframes matchmaking-pulse {
+  from { transform: scale(0.72); opacity: 0.85; }
+  to { transform: scale(1.35); opacity: 0; }
+}
+
+.matchmaking-clock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  color: var(--color-green-dark);
+}
+
+.matchmaking-clock time {
+  min-width: 4.5ch;
+  font-size: 1.65rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchmaking-status {
+  min-height: 2.7rem;
+  margin: 0.5rem 0 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.matchmaking-dialog > .button + .button {
+  margin-top: 0.55rem;
 }
 
 .segmented-control {
@@ -852,9 +996,28 @@
   .lobby-heading,
   .recent-games,
   .profile-tool--editor,
+  .ranked-tool,
   .game-tool,
   .account-nudge {
     grid-column: 1;
+  }
+
+  .ranked-population {
+    grid-template-columns: 1fr;
+  }
+
+  .ranked-population span {
+    grid-template-columns: 1.5rem auto 1fr;
+    padding: 0.65rem 0.4rem;
+  }
+
+  .ranked-population span + span {
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+
+  .ranked-population svg {
+    grid-row: auto;
   }
 
   .lobby-heading h1 {

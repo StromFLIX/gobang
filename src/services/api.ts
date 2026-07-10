@@ -5,8 +5,10 @@ import type {
   GuestSession,
   Invitation,
   Leaderboard,
+  MatchmakingTicket,
   MergedAuthSession,
   Player,
+  PresenceStats,
   ReactionKind,
 } from '@/types/game'
 
@@ -71,6 +73,17 @@ export const api = {
     request<Invitation>(`/api/invitations/${invitationId}/accept`, json('POST')),
   dismissInvitation: (invitationId: string) =>
     request<Invitation>(`/api/invitations/${invitationId}/dismiss`, json('POST')),
+  getMatchmakingTicket: () =>
+    request<MatchmakingTicket | null>('/api/matchmaking'),
+  joinMatchmaking: () =>
+    request<MatchmakingTicket>('/api/matchmaking/join', json('POST')),
+  leaveMatchmaking: () =>
+    request<MatchmakingTicket | null>('/api/matchmaking', json('DELETE')),
+  heartbeat: (gameId: string | null = null) =>
+    request<PresenceStats>(
+      '/api/presence/heartbeat',
+      json('POST', { game_id: gameId }),
+    ),
   listGames: () => request<Game[]>('/api/games'),
   createGame: () => request<Game>('/api/games', json('POST')),
   joinGame: (inviteCode: string) =>
