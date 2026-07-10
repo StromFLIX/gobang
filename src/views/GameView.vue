@@ -61,9 +61,12 @@ const accountError = ref('')
 const accountSaving = ref(false)
 const incomingReaction = ref<GameReaction | null>(null)
 const reactionPending = ref(false)
-const { heartbeat: presenceHeartbeat, startPresence } = usePresence(() =>
-  game.value?.status === 'active' ? game.value.id : null,
-)
+const challengeNotice = ref('')
+const {
+  stats: presenceStats,
+  heartbeat: presenceHeartbeat,
+  startPresence,
+} = usePresence(() => (game.value?.status === 'active' ? game.value.id : null), 8_000)
 let unsubscribe: (() => Promise<void>) | null = null
 let reactionUnsubscribe: (() => Promise<void>) | null = null
 let reactionTimer: ReturnType<typeof setTimeout> | null = null
@@ -136,6 +139,10 @@ const statusLabel = computed(() => {
   }
   return isMyTurn.value ? 'Your turn' : 'Waiting'
 })
+const opponentPresenceLabel = computed(() => {
+  if (!presenceStats.value || presenceStats.value.opponent_present === null) return 'Checking'
+  return presenceStats.value?.opponent_present ? 'At board' : 'Away'
+})
 
 watch(
   [isTerminal, () => player.value?.is_guest, () => game.value?.id],
@@ -182,7 +189,7 @@ async function handleInvitationUpdate(invitation: import('@/types/game').Invitat
     invitation.game_invite_code &&
     invitation.challenger.id === player.value?.id
   ) {
-    await router.push(`/game/${invitation.game_invite_code}`)
+    challengeNotice.value = `${invitation.recipient.display_name} accepted your challenge.`
   }
 }
 
@@ -211,6 +218,10 @@ function playerById(playerId: string | null): Player | null {
   if (!game.value || !playerId) return null
   if (game.value.host.id === playerId) return game.value.host
   return game.value.guest?.id === playerId ? game.value.guest : null
+}
+
+function isOpponent(candidate: Player | null) {
+  return candidate !== null && candidate.id !== player.value?.id
 }
 
 async function completeProfile() {
@@ -508,6 +519,18 @@ function stoneFor(playerId: string): Stone | null {
             </span>
             <strong>{{ blackPlayer?.display_name ?? 'Waiting' }}</strong>
             <small v-if="blackPlayer" class="player-short-id">{{ shortPlayerId(blackPlayer.id) }}</small>
+            <span
+              v-if="game.status === 'active' && isOpponent(blackPlayer)"
+              class="board-presence"
+            >
+              <i
+                :class="[
+                  'presence-dot',
+                  { 'presence-dot--turn presence-dot--pulse': presenceStats?.opponent_present },
+                ]"
+              />
+              {{ opponentPresenceLabel }}
+            </span>
           </div>
           <span class="stone-total stone-total--black" aria-label="Black stones on board" title="Black stones on board">
             <i aria-hidden="true" />
@@ -527,6 +550,18 @@ function stoneFor(playerId: string): Stone | null {
             </span>
             <strong>{{ whitePlayer?.display_name ?? 'Waiting' }}</strong>
             <small v-if="whitePlayer" class="player-short-id">{{ shortPlayerId(whitePlayer.id) }}</small>
+            <span
+              v-if="game.status === 'active' && isOpponent(whitePlayer)"
+              class="board-presence board-presence--right"
+            >
+              <i
+                :class="[
+                  'presence-dot',
+                  { 'presence-dot--turn presence-dot--pulse': presenceStats?.opponent_present },
+                ]"
+              />
+              {{ opponentPresenceLabel }}
+            </span>
           </div>
           <AvatarImage :seed="whitePlayer?.avatar_seed ?? 'white'" color="white" size="medium" />
         </div>
@@ -553,6 +588,10 @@ function stoneFor(playerId: string): Stone | null {
             @send="sendReaction"
           />
           <p v-if="actionError" class="board-message" role="status">{{ actionError }}</p>
+          <p v-if="challengeNotice" class="board-notice" role="status">
+            {{ challengeNotice }}
+            <RouterLink to="/">Open it from the lobby</RouterLink>
+          </p>
         </div>
 
         <aside class="game-actions">

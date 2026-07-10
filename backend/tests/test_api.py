@@ -416,6 +416,7 @@ def test_presence_counts_online_players_and_distinct_active_matches() -> None:
             "online_players": 1,
             "playing_players": 0,
             "active_matches": 0,
+            "opponent_present": None,
         }
 
         created = client.post(
@@ -447,6 +448,7 @@ def test_presence_counts_online_players_and_distinct_active_matches() -> None:
             "online_players": 3,
             "playing_players": 2,
             "active_matches": 1,
+            "opponent_present": True,
         }
 
 

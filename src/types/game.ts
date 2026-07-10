@@ -121,6 +121,7 @@ export interface PresenceStats {
   online_players: number
   playing_players: number
   active_matches: number
+  opponent_present: boolean | null
 }
 
 export type ReactionKind =

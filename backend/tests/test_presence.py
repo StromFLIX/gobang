@@ -22,10 +22,13 @@ async def test_presence_expires_stale_players_and_counts_distinct_games() -> Non
     second = Player(id="second", display_name="Second", avatar_seed="second")
     third = Player(id="third", display_name="Third", avatar_seed="third")
 
-    await service.heartbeat(first, "game-one")
-    await service.heartbeat(second, "game-one")
+    first_arrival = await service.heartbeat(first, "game-one")
+    second_arrival = await service.heartbeat(second, "game-one")
     stats = await service.heartbeat(third, "game-two")
 
+    assert first_arrival.opponent_present is False
+    assert second_arrival.opponent_present is True
+    assert stats.opponent_present is False
     assert stats.online_players == 3
     assert stats.playing_players == 3
     assert stats.active_matches == 2
@@ -36,3 +39,4 @@ async def test_presence_expires_stale_players_and_counts_distinct_games() -> Non
     assert stats.online_players == 1
     assert stats.playing_players == 0
     assert stats.active_matches == 0
+    assert stats.opponent_present is None

@@ -12,6 +12,7 @@ import {
   Search,
   Swords,
   Timer,
+  UserPlus,
   Users,
   X,
 } from '@lucide/vue'
@@ -22,6 +23,7 @@ import AvatarImage from '@/components/AvatarImage.vue'
 import AvatarPicker from '@/components/AvatarPicker.vue'
 import InvitationInbox from '@/components/InvitationInbox.vue'
 import LeaderboardPanel from '@/components/LeaderboardPanel.vue'
+import LobbyMatchReplay from '@/components/LobbyMatchReplay.vue'
 import { useInvitations } from '@/composables/useInvitations'
 import { usePresence } from '@/composables/usePresence'
 import { useSession } from '@/composables/useSession'
@@ -572,9 +574,97 @@ function groupSummary(group: OpponentGameGroup) {
     </header>
 
     <main v-if="ready && player" class="lobby-layout">
-      <section class="lobby-heading">
-        <p class="section-kicker">Gobang</p>
-        <h1>Your games.</h1>
+      <section class="lobby-intro" aria-labelledby="lobby-intro-title">
+        <LobbyMatchReplay />
+
+        <div class="lobby-entry">
+          <p class="section-kicker">Play Gobang</p>
+          <h1 id="lobby-intro-title">Choose your match.</h1>
+          <p class="lobby-entry__lead">
+            Five in a row, pair captures, and a live opponent on the other side.
+          </p>
+
+          <section class="lobby-choice" aria-labelledby="ranked-choice-title">
+            <div class="lobby-choice__heading">
+              <span><Swords :size="19" /></span>
+              <div>
+                <h2 id="ranked-choice-title">Play someone new</h2>
+                <p>
+                  {{ player.is_guest ? 'Sign in or create an account for ranked matchmaking.' : 'Enter the ranked queue and play for Elo.' }}
+                </p>
+              </div>
+              <strong v-if="!player.is_guest && leaderboard" class="lobby-choice__rating">
+                {{ leaderboard.player.elo_rating }} Elo
+              </strong>
+            </div>
+
+            <div class="lobby-population" aria-label="Approximate live population">
+              <span><Radio :size="15" /><strong>{{ presenceStats?.online_players ?? '...' }}</strong> online</span>
+              <span><Users :size="15" /><strong>{{ presenceStats?.playing_players ?? '...' }}</strong> playing</span>
+              <span><Grid3X3 :size="15" /><strong>{{ presenceStats?.active_matches ?? '...' }}</strong> matches</span>
+            </div>
+
+            <div v-if="player.is_guest" class="lobby-choice__actions">
+              <button type="button" class="button button--primary" @click="openAuth('register')">
+                <UserPlus :size="18" />
+                Create account
+              </button>
+              <button type="button" class="button button--secondary" @click="openAuth('login')">
+                <LogIn :size="18" />
+                Sign in
+              </button>
+            </div>
+            <button
+              v-else
+              type="button"
+              class="button button--primary lobby-ranked-button"
+              :disabled="matchmakingBusy || matchmakingOpen"
+              @click="startRankedMatchmaking"
+            >
+              <Search :size="19" />
+              Find ranked match
+            </button>
+          </section>
+
+          <section class="lobby-choice" aria-labelledby="friends-choice-title">
+            <div class="lobby-choice__heading">
+              <span><Users :size="19" /></span>
+              <div>
+                <h2 id="friends-choice-title">Play with friends</h2>
+                <p>Open a private game and share its link, or join with a code.</p>
+              </div>
+            </div>
+
+            <button type="button" class="button button--secondary lobby-private-button" :disabled="busy" @click="startGame">
+              <Plus :size="19" />
+              Start game
+            </button>
+            <div class="join-row lobby-join-row">
+              <span class="input-icon"><Link2 :size="18" /></span>
+              <input
+                id="invite-code"
+                v-model="inviteCode"
+                class="text-input text-input--icon"
+                aria-label="Game link or code"
+                autocomplete="off"
+                placeholder="Paste game link or code"
+                @keyup.enter="joinGame"
+              />
+              <button
+                type="button"
+                class="icon-button icon-button--confirm"
+                :disabled="busy"
+                title="Join game"
+                aria-label="Join game"
+                @click="joinGame"
+              >
+                <ArrowRight :size="20" />
+              </button>
+            </div>
+          </section>
+
+          <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
+        </div>
       </section>
 
       <p v-if="mergeNotice" class="merge-notice" role="status">{{ mergeNotice }}</p>
@@ -701,91 +791,6 @@ function groupSummary(group: OpponentGameGroup) {
           Sign in
         </button>
       </div>
-
-      <section class="room-tool ranked-tool" aria-labelledby="ranked-tool-title">
-        <div class="section-heading-row">
-          <div>
-            <p class="section-kicker">Ranked</p>
-            <h2 id="ranked-tool-title">Play someone online</h2>
-          </div>
-          <span v-if="!player.is_guest && leaderboard" class="session-badge ranked-rating">
-            <Swords :size="13" />
-            {{ leaderboard.player.elo_rating }} Elo
-          </span>
-        </div>
-
-        <div class="ranked-population" aria-label="Approximate live population">
-          <span>
-            <Radio :size="17" />
-            <strong>{{ presenceStats?.online_players ?? '...' }}</strong>
-            online
-          </span>
-          <span>
-            <Users :size="17" />
-            <strong>{{ presenceStats?.playing_players ?? '...' }}</strong>
-            playing
-          </span>
-          <span>
-            <Grid3X3 :size="17" />
-            <strong>{{ presenceStats?.active_matches ?? '...' }}</strong>
-            matches
-          </span>
-        </div>
-
-        <button
-          type="button"
-          class="button button--primary ranked-search-button"
-          :disabled="matchmakingBusy || matchmakingOpen"
-          @click="startRankedMatchmaking"
-        >
-          <Search :size="20" />
-          {{ player.is_guest ? 'Create account to play ranked' : 'Find ranked match' }}
-        </button>
-        <p class="ranked-note">
-          {{ player.is_guest ? 'Ranked play requires an account.' : 'Matched games affect your Elo rating.' }}
-        </p>
-      </section>
-
-      <section class="room-tool game-tool" aria-labelledby="game-tool-title">
-        <div class="section-heading-row">
-          <div>
-            <p class="section-kicker">Game</p>
-            <h2 id="game-tool-title">Start or join a game</h2>
-          </div>
-        </div>
-
-        <button type="button" class="button button--primary create-room" :disabled="busy" @click="startGame">
-          <Plus :size="20" />
-          Start game
-        </button>
-
-        <div class="join-divider"><span>or</span></div>
-
-        <label class="field-label" for="invite-code">Game link or code</label>
-        <div class="join-row">
-          <span class="input-icon"><Link2 :size="18" /></span>
-          <input
-            id="invite-code"
-            v-model="inviteCode"
-            class="text-input text-input--icon"
-            autocomplete="off"
-            placeholder="Paste invite"
-            @keyup.enter="joinGame"
-          />
-          <button
-            type="button"
-            class="icon-button icon-button--confirm"
-            :disabled="busy"
-            title="Join game"
-            aria-label="Join game"
-            @click="joinGame"
-          >
-            <ArrowRight :size="20" />
-          </button>
-        </div>
-
-        <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
-      </section>
 
       <LeaderboardPanel
         :leaderboard="leaderboard"

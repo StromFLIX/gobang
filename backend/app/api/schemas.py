@@ -108,6 +108,7 @@ class PresenceStatsResponse(BaseModel):
     online_players: int
     playing_players: int
     active_matches: int
+    opponent_present: bool | None
 
     @classmethod
     def from_domain(cls, stats: PresenceStats) -> "PresenceStatsResponse":
@@ -115,6 +116,7 @@ class PresenceStatsResponse(BaseModel):
             online_players=stats.online_players,
             playing_players=stats.playing_players,
             active_matches=stats.active_matches,
+            opponent_present=stats.opponent_present,
         )
 
 
