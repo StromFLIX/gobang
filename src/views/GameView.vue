@@ -20,13 +20,14 @@ import AvatarImage from '@/components/AvatarImage.vue'
 import AvatarPicker from '@/components/AvatarPicker.vue'
 import GridComponent from '@/components/GridComponent.vue'
 import InvitationInbox from '@/components/InvitationInbox.vue'
+import ReactionBar from '@/components/ReactionBar.vue'
 import { useInvitations } from '@/composables/useInvitations'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
 import { shortPlayerId } from '@/logic/games'
 import { ApiError, api } from '@/services/api'
-import { subscribeToGame } from '@/services/pocketbase'
-import type { Game, Player, Stone } from '@/types/game'
+import { subscribeToGame, subscribeToGameReactions } from '@/services/pocketbase'
+import type { Game, GameReaction, Player, ReactionKind, Stone } from '@/types/game'
 
 const route = useRoute()
 const router = useRouter()
@@ -57,7 +58,11 @@ const accountPassword = ref('')
 const accountPasswordConfirm = ref('')
 const accountError = ref('')
 const accountSaving = ref(false)
+const incomingReaction = ref<GameReaction | null>(null)
+const reactionPending = ref(false)
 let unsubscribe: (() => Promise<void>) | null = null
+let reactionUnsubscribe: (() => Promise<void>) | null = null
+let reactionTimer: ReturnType<typeof setTimeout> | null = null
 
 const inviteCode = computed(() => String(route.params.inviteCode ?? ''))
 const blackPlayer = computed(() => playerById(game.value?.black_player_id ?? null))
@@ -106,6 +111,11 @@ const opponentRematchReady = computed(() => {
   if (!game.value || !player.value) return false
   return isHost.value ? game.value.guest_rematch : game.value.host_rematch
 })
+const reactionOpponentName = computed(() =>
+  incomingReaction.value
+    ? (playerById(incomingReaction.value.sender_id)?.display_name ?? 'Opponent')
+    : '',
+)
 const rematchStateLabel = computed(() => {
   if (myRematchReady.value && opponentRematchReady.value) return 'Starting…'
   if (opponentRematchReady.value) return 'Opponent wants a rematch'
@@ -154,7 +164,9 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   void unsubscribe?.()
+  void reactionUnsubscribe?.()
   void stopInvitationUpdates()
+  if (reactionTimer) clearTimeout(reactionTimer)
   window.removeEventListener('online', handleOnline)
   window.removeEventListener('offline', handleOffline)
 })
@@ -234,12 +246,40 @@ async function joinRoom() {
 
 async function startSubscription() {
   await unsubscribe?.()
+  await reactionUnsubscribe?.()
   unsubscribe = null
+  reactionUnsubscribe = null
   if (!game.value) return
-  unsubscribe = await subscribeToGame(game.value.id, (nextGame) => {
-    if (!game.value || nextGame.revision >= game.value.revision) game.value = nextGame
-    connection.value = 'live'
-  })
+  ;[unsubscribe, reactionUnsubscribe] = await Promise.all([
+    subscribeToGame(game.value.id, (nextGame) => {
+      if (!game.value || nextGame.revision >= game.value.revision) game.value = nextGame
+      connection.value = 'live'
+    }),
+    subscribeToGameReactions(game.value.id, showReaction),
+  ])
+}
+
+function showReaction(reaction: GameReaction) {
+  if (reaction.sender_id === player.value?.id) return
+  incomingReaction.value = reaction
+  if (reactionTimer) clearTimeout(reactionTimer)
+  reactionTimer = setTimeout(() => {
+    incomingReaction.value = null
+    reactionTimer = null
+  }, 1800)
+}
+
+async function sendReaction(kind: ReactionKind) {
+  if (!game.value?.guest || reactionPending.value || connection.value !== 'live') return
+  reactionPending.value = true
+  actionError.value = ''
+  try {
+    await api.sendReaction(game.value.id, kind)
+  } catch (error) {
+    actionError.value = error instanceof ApiError ? error.message : 'Could not send reaction.'
+  } finally {
+    reactionPending.value = false
+  }
 }
 
 async function syncGame() {
@@ -497,6 +537,12 @@ function stoneFor(playerId: string): Stone | null {
             :revision="game.revision"
             :last-move="lastMove"
             @move="playMove"
+          />
+          <ReactionBar
+            :disabled="!game.guest || connection !== 'live' || reactionPending"
+            :incoming="incomingReaction"
+            :incoming-name="reactionOpponentName"
+            @send="sendReaction"
           />
           <p v-if="actionError" class="board-message" role="status">{{ actionError }}</p>
         </div>

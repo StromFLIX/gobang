@@ -2,6 +2,8 @@
 
 A private realtime two-player Gobang game with pair captures. Five or more stones in a row wins; captures remove bracketed pairs but do not win the game by themselves. Captured intersections are blocked for the immediately following move, then become available again.
 
+Players in a joined game can send preset quick reactions below the board: Wow, +1, Shit, Mind blown, Facepalm, Heart, and GG. A reaction pops up and fades on the opponent's screen. Reactions are participant-private and reuse one realtime record per game, so they do not create chat history or affect game revisions.
+
 ## Stack
 
 - Vue 3 and Vite for the responsive lobby and board

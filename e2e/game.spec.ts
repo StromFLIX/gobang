@@ -87,6 +87,13 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   await expect(host.getByText('Guest player', { exact: true })).toBeVisible()
   await expect(guest.getByText('Host player', { exact: true })).toBeVisible()
 
+  await host.getByRole('button', { name: 'Send Shit' }).click()
+  await expect(guest.locator('.reaction-popup img[data-reaction="poop"]')).toBeVisible()
+  await expect(guest.locator('.reaction-popup')).toContainText('Host player')
+  await expect(host.locator('.reaction-popup')).toHaveCount(0)
+  await guest.screenshot({ path: 'test-results/reaction-popup.png' })
+  await expect(guest.locator('.reaction-popup')).toBeHidden({ timeout: 3_000 })
+
   const hostPoint = host.getByRole('gridcell', { name: 'Row 1, column 1', exact: true })
   const activePage = (await hostPoint.isEnabled()) ? host : guest
   const waitingPage = activePage === host ? guest : host

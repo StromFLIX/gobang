@@ -102,6 +102,23 @@ export interface Invitation {
   game_invite_code: string | null
 }
 
+export type ReactionKind =
+  | 'wow'
+  | 'plus_one'
+  | 'poop'
+  | 'mind_blown'
+  | 'facepalm'
+  | 'heart'
+  | 'gg'
+
+export interface GameReaction {
+  id: string
+  game_id: string
+  sender_id: string
+  kind: ReactionKind
+  nonce: string
+}
+
 export interface AuthSession {
   token: string
   player: Player

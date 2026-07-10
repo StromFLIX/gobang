@@ -8,6 +8,7 @@ from app.clients.pocketbase import GuestSession, PlayerSession, PocketBaseError
 from app.config import Settings
 from app.domain.game import Game, Player
 from app.domain.invitation import Invitation, InvitationStatus
+from app.domain.reaction import GameReaction
 from app.main import create_app
 from app.services.games import GameConflict
 
@@ -81,6 +82,17 @@ class MemoryInvitationRepository:
         return deepcopy(invitation)
 
 
+class MemoryReactionRepository:
+    def __init__(self) -> None:
+        self.reactions: dict[str, GameReaction] = {}
+
+    async def upsert(self, reaction: GameReaction) -> GameReaction:
+        existing = self.reactions.get(reaction.game_id)
+        stored = replace(reaction, id=existing.id if existing else "reaction-1")
+        self.reactions[reaction.game_id] = deepcopy(stored)
+        return deepcopy(stored)
+
+
 class FakePocketBase:
     def __init__(self) -> None:
         self.players = {
@@ -129,12 +141,15 @@ class FakePocketBase:
         return PlayerSession("registered-token", registered)
 
 
-def make_client() -> TestClient:
+def make_client(
+    reaction_repository: MemoryReactionRepository | None = None,
+) -> TestClient:
     app = create_app(
         settings=Settings(frontend_dist="missing"),
         pocketbase=FakePocketBase(),  # type: ignore[arg-type]
         repository=MemoryRepository(),
         invitation_repository=MemoryInvitationRepository(),
+        reaction_repository=reaction_repository or MemoryReactionRepository(),
     )
     return TestClient(app)
 
@@ -232,6 +247,59 @@ def test_registered_players_can_challenge_and_accept_before_game_creation() -> N
         assert client.get(
             "/api/invitations", headers={"Authorization": "Bearer rival-token"}
         ).json() == []
+
+
+def test_game_reactions_are_private_validated_and_upserted() -> None:
+    reactions = MemoryReactionRepository()
+    with make_client(reactions) as client:
+        created = client.post(
+            "/api/games", headers={"Authorization": "Bearer host-token"}
+        ).json()
+        reaction_url = f"/api/games/{created['id']}/reactions"
+
+        before_join = client.post(
+            reaction_url,
+            headers={"Authorization": "Bearer host-token"},
+            json={"kind": "wow"},
+        )
+        assert before_join.status_code == 422
+
+        client.post(
+            "/api/games/join",
+            headers={"Authorization": "Bearer guest-token"},
+            json={"invite_code": created["invite_code"]},
+        )
+        outsider = client.post(
+            reaction_url,
+            headers={"Authorization": "Bearer third-token"},
+            json={"kind": "wow"},
+        )
+        assert outsider.status_code == 404
+        unsupported = client.post(
+            reaction_url,
+            headers={"Authorization": "Bearer host-token"},
+            json={"kind": "custom-text"},
+        )
+        assert unsupported.status_code == 422
+
+        first = client.post(
+            reaction_url,
+            headers={"Authorization": "Bearer host-token"},
+            json={"kind": "poop"},
+        )
+        second = client.post(
+            reaction_url,
+            headers={"Authorization": "Bearer guest-token"},
+            json={"kind": "gg"},
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["id"] == second.json()["id"]
+        assert first.json()["nonce"] != second.json()["nonce"]
+        assert second.json()["sender_id"] == "guest"
+        assert second.json()["kind"] == "gg"
+        assert len(reactions.reactions) == 1
 
 
 def test_private_room_turn_and_revision_protection() -> None:

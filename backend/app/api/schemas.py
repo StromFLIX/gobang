@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr, Field, StringConstraints
 from app.clients.pocketbase import GuestSession, PlayerSession
 from app.domain.game import Game, GameStatus, Move, Player
 from app.domain.invitation import Invitation, InvitationStatus
+from app.domain.reaction import GameReaction, ReactionKind
 from app.domain.rules import Stone
 from app.services.games import (
     HeadToHeadEntry,
@@ -95,6 +96,28 @@ class RegisterRequest(LoginRequest):
 class ProfileRequest(BaseModel):
     display_name: DisplayName
     avatar_seed: AvatarSeed
+
+
+class ReactionRequest(BaseModel):
+    kind: ReactionKind
+
+
+class ReactionResponse(BaseModel):
+    id: str
+    game_id: str
+    sender_id: str
+    kind: ReactionKind
+    nonce: str
+
+    @classmethod
+    def from_domain(cls, reaction: GameReaction) -> "ReactionResponse":
+        return cls(
+            id=reaction.id,
+            game_id=reaction.game_id,
+            sender_id=reaction.sender_id,
+            kind=reaction.kind,
+            nonce=reaction.nonce,
+        )
 
 
 class ChallengeRequest(BaseModel):

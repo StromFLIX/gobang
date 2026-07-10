@@ -1,11 +1,13 @@
 import type {
   AuthSession,
   Game,
+  GameReaction,
   GuestSession,
   Invitation,
   Leaderboard,
   MergedAuthSession,
   Player,
+  ReactionKind,
 } from '@/types/game'
 
 export class ApiError extends Error {
@@ -81,6 +83,8 @@ export const api = {
       `/api/games/${gameId}/moves`,
       json('POST', { position, expected_revision: expectedRevision }),
     ),
+  sendReaction: (gameId: string, kind: ReactionKind) =>
+    request<GameReaction>(`/api/games/${gameId}/reactions`, json('POST', { kind })),
   cancelGame: (gameId: string) =>
     request<Game>(`/api/games/${gameId}/cancel`, json('POST')),
   resignGame: (gameId: string) =>

@@ -5,11 +5,12 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from app.api import auth, games, invitations, leaderboard
+from app.api import auth, games, invitations, leaderboard, reactions
 from app.clients.pocketbase import PocketBaseClient, PocketBaseError
 from app.config import Settings, get_settings
 from app.repositories.pocketbase_games import PocketBaseGameRepository
 from app.repositories.pocketbase_invitations import PocketBaseInvitationRepository
+from app.repositories.pocketbase_reactions import PocketBaseReactionRepository
 from app.services.games import (
     GameConflict,
     GameForbidden,
@@ -26,6 +27,7 @@ from app.services.invitations import (
     InvitationRepository,
     InvitationService,
 )
+from app.services.reactions import ReactionInvalid, ReactionRepository, ReactionService
 
 
 def create_app(
@@ -34,6 +36,7 @@ def create_app(
     pocketbase: PocketBaseClient | None = None,
     repository: GameRepository | None = None,
     invitation_repository: InvitationRepository | None = None,
+    reaction_repository: ReactionRepository | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     owns_pocketbase = pocketbase is None
@@ -51,6 +54,9 @@ def create_app(
         app.state.invitation_service = InvitationService(
             resolved_invitation_repository, game_service, client.get_player
         )
+        app.state.reaction_service = ReactionService(
+            reaction_repository or PocketBaseReactionRepository(client), game_service
+        )
         yield
         if owns_pocketbase:
             await client.close()
@@ -59,6 +65,7 @@ def create_app(
     application.include_router(auth.router)
     application.include_router(games.router)
     application.include_router(invitations.router)
+    application.include_router(reactions.router)
     application.include_router(leaderboard.router)
 
     @application.get("/health", tags=["system"])
@@ -102,6 +109,12 @@ def create_app(
     @application.exception_handler(InvitationInvalid)
     async def invitation_invalid(
         _request: Request, error: InvitationInvalid
+    ) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(error)})
+
+    @application.exception_handler(ReactionInvalid)
+    async def reaction_invalid(
+        _request: Request, error: ReactionInvalid
     ) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(error)})
 

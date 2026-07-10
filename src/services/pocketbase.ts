@@ -1,6 +1,6 @@
 import PocketBase, { type RecordModel } from 'pocketbase'
 
-import type { Game, Invitation, Player, Stone } from '@/types/game'
+import type { Game, GameReaction, Invitation, Player, Stone } from '@/types/game'
 
 const pocketbase = new PocketBase('/pb')
 pocketbase.autoCancellation(false)
@@ -32,6 +32,17 @@ export async function subscribeToInvitations(
   })
 }
 
+export async function subscribeToGameReactions(
+  gameId: string,
+  onReaction: (reaction: GameReaction) => void,
+): Promise<() => Promise<void>> {
+  return pocketbase.collection('game_reactions').subscribe('*', (event) => {
+    if (event.action !== 'delete' && String(event.record.game) === gameId) {
+      onReaction(reactionFromRecord(event.record))
+    }
+  })
+}
+
 function invitationFromRecord(record: RecordModel): Invitation {
   return {
     id: record.id,
@@ -41,6 +52,16 @@ function invitationFromRecord(record: RecordModel): Invitation {
     created_at: String(record.created),
     expires_at: String(record.expires_at),
     game_invite_code: optionalId(record.game_invite_code),
+  }
+}
+
+function reactionFromRecord(record: RecordModel): GameReaction {
+  return {
+    id: record.id,
+    game_id: String(record.game),
+    sender_id: String(record.sender),
+    kind: record.kind,
+    nonce: String(record.nonce),
   }
 }
 

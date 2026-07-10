@@ -21,6 +21,7 @@
     "@dicebear/core": "^9.2.2",
     "@lucide/vue": "^1.24.0",
     "@tailwindcss/vite": "^4.0.3",
+    "@twemoji/svg": "^15.0.0",
     "pocketbase": "^0.27.0",
     "tailwindcss": "^4.0.3",
     "vue": "^3.5.13",
