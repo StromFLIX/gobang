@@ -1,8 +1,9 @@
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 
 from app.clients.pocketbase import PocketBaseClient, PocketBaseError
-from app.domain.game import Game, GameStatus, Move, Player
+from app.domain.game import Game, GameStatus, Move, Player, RoundResult
 from app.domain.rules import Stone
 from app.services.games import GameConflict
 
@@ -54,6 +55,20 @@ class PocketBaseGameRepository:
         )
         return [game_from_record(item) for item in response["items"]]
 
+    async def list_all(self) -> Sequence[Game]:
+        games: list[Game] = []
+        page = 1
+        while True:
+            response = await self._client.admin_request(
+                "GET",
+                "/api/collections/games/records",
+                params={"sort": "-updated", "page": page, "perPage": 200},
+            )
+            games.extend(game_from_record(item) for item in response["items"])
+            if page >= int(response["totalPages"]):
+                return games
+            page += 1
+
     async def update(self, game: Game, expected_revision: int) -> Game:
         if game.revision != expected_revision + 1:
             raise GameConflict("Invalid game revision update")
@@ -96,6 +111,15 @@ def game_to_record(game: Game) -> dict[str, Any]:
         "guest_score": game.guest_score,
         "host_rematch": game.host_rematch,
         "guest_rematch": game.guest_rematch,
+        "round_results": [
+            {
+                "round": result.round,
+                "completed_at": result.completed_at.isoformat(),
+                "status": result.status.value,
+                "winner_player_id": result.winner_player_id,
+            }
+            for result in game.round_results
+        ],
     }
 
 
@@ -129,6 +153,15 @@ def game_from_record(record: dict[str, Any]) -> Game:
         guest_score=int(record["guest_score"]),
         host_rematch=bool(record["host_rematch"]),
         guest_rematch=bool(record["guest_rematch"]),
+        round_results=[
+            RoundResult(
+                round=int(result["round"]),
+                completed_at=datetime.fromisoformat(result["completed_at"]),
+                status=GameStatus(result["status"]),
+                winner_player_id=optional_id(result.get("winner_player_id")),
+            )
+            for result in record.get("round_results") or []
+        ],
     )
 
 

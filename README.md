@@ -25,6 +25,8 @@ Local port `8080` is published by `compose.override.yaml`, which Docker Compose 
 
 PocketBase data is stored in the `pocketbase_data` volume. Do not remove that volume during updates.
 
+The lobby leaderboard ranks completed rounds by wins and shows W-L-D records for the last 7 days or all time. `Against friends` groups the current player's record by opponents they have played, while result history shows who beat whom. Scores created before the timestamped result migration remain in all-time totals but cannot appear in the 7-day view or dated result history.
+
 ## Local development
 
 Run PocketBase with the Compose stack, then run the backend and frontend separately:
@@ -68,6 +70,17 @@ npm run test:e2e
 TLS terminates at Coolify. Caddy handles internal same-origin routing and does not expose the PocketBase dashboard.
 Its configuration is baked into the Caddy image because Coolify deploys Compose files from an artifacts directory where repository-relative file mounts are not reliable.
 Do not add a host port mapping in Coolify; its proxy connects to Caddy on internal port `80`.
+
+The public domain must be assigned only to the `caddy` service. Leave domains blank for `app` and `pocketbase`; assigning the domain to `app` bypasses `/pb` routing and breaks realtime subscriptions.
+
+After deployment, verify both routes through the public domain:
+
+```sh
+curl https://your-domain.example/health
+curl https://your-domain.example/pb/api/health
+```
+
+The first response should be `{"status":"ok"}` and the second should be PocketBase JSON containing `"API is healthy."`. If the second response is the Gobang HTML page, the domain is attached to `app` instead of `caddy`.
 
 ## Accounts and recovery
 

@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 
 from app.domain.rules import Stone, empty_board
@@ -29,6 +30,14 @@ class Move:
     captured: tuple[int, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class RoundResult:
+    round: int
+    completed_at: datetime
+    status: GameStatus
+    winner_player_id: str | None
+
+
 @dataclass(slots=True)
 class Game:
     id: str
@@ -51,6 +60,7 @@ class Game:
     guest_score: int = 0
     host_rematch: bool = False
     guest_rematch: bool = False
+    round_results: list[RoundResult] = field(default_factory=list)
 
     def player_ids(self) -> tuple[str, ...]:
         if self.guest is None:

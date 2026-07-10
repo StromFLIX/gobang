@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from app.api import auth, games
+from app.api import auth, games, leaderboard
 from app.clients.pocketbase import PocketBaseClient, PocketBaseError
 from app.config import Settings, get_settings
 from app.repositories.pocketbase_games import PocketBaseGameRepository
@@ -41,6 +41,7 @@ def create_app(
     application = FastAPI(title="Gobang API", version="0.1.0", lifespan=lifespan)
     application.include_router(auth.router)
     application.include_router(games.router)
+    application.include_router(leaderboard.router)
 
     @application.get("/health", tags=["system"])
     async def health() -> dict[str, str]:

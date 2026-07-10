@@ -32,6 +32,9 @@ class MemoryRepository:
     async def list_for_player(self, player_id: str) -> Sequence[Game]:
         return [deepcopy(game) for game in self.games.values() if player_id in game.player_ids()]
 
+    async def list_all(self) -> Sequence[Game]:
+        return [deepcopy(game) for game in self.games.values()]
+
     async def update(self, game: Game, expected_revision: int) -> Game:
         if self.games[game.id].revision != expected_revision:
             raise GameConflict
@@ -150,3 +153,31 @@ def test_private_room_turn_and_revision_protection() -> None:
             json={"position": 1, "expected_revision": joined["revision"]},
         )
         assert stale.status_code == 409
+
+
+def test_leaderboard_reports_overall_and_personal_results() -> None:
+    with make_client() as client:
+        created = client.post(
+            "/api/games", headers={"Authorization": "Bearer host-token"}
+        ).json()
+        joined = client.post(
+            "/api/games/join",
+            headers={"Authorization": "Bearer guest-token"},
+            json={"invite_code": created["invite_code"]},
+        ).json()
+        client.post(
+            f"/api/games/{joined['id']}/resign",
+            headers={"Authorization": "Bearer host-token"},
+        )
+
+        response = client.get(
+            "/api/leaderboard", headers={"Authorization": "Bearer host-token"}
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["player"]["performance"]["all_time"]["losses"] == 1
+        assert body["opponents"][0]["opponent"]["id"] == "guest"
+        assert body["opponents"][0]["performance"]["last_7_days"]["losses"] == 1
+        assert body["overall"][0]["player"]["id"] == "guest"
+        assert body["results"][0]["winner"]["id"] == "guest"

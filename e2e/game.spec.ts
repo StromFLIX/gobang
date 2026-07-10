@@ -164,3 +164,34 @@ test('an upgraded guest can continue from another device', async ({ browser }) =
   await firstContext.close()
   await secondContext.close()
 })
+
+test('a finished round appears in personal leaderboard history', async ({ browser }) => {
+  const hostContext = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+  const guestContext = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+  const host = await hostContext.newPage()
+  const guest = await guestContext.newPage()
+
+  await configurePlayer(host, 'Leaderboard host', 'glasses3')
+  await host.getByRole('button', { name: 'New room' }).click()
+  await expect(host).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
+  await guest.goto(host.url())
+  await guest.locator('#join-player-name').fill('Leaderboard friend')
+  await guest.getByRole('button', { name: 'Join room' }).click()
+  await expect(host.getByText('Leaderboard friend', { exact: true })).toBeVisible()
+
+  await host.getByRole('button', { name: 'Resign', exact: true }).click()
+  await host.getByRole('button', { name: 'Confirm resign' }).click()
+  await expect(host.getByRole('heading', { name: 'Leaderboard friend wins' })).toBeVisible()
+  await host.getByRole('link', { name: 'Back to lobby' }).click()
+
+  await expect(host.getByRole('heading', { name: 'Leaderboard' })).toBeVisible()
+  await expect(host.locator('.personal-summary')).toContainText('0–1–0')
+  await host.getByRole('tab', { name: 'Against friends' }).click()
+  await expect(host.locator('.matchup-list')).toContainText('Leaderboard friend')
+  await expect(host.locator('.result-list')).toContainText(
+    'Leaderboard friend beat Leaderboard host',
+  )
+
+  await hostContext.close()
+  await guestContext.close()
+})

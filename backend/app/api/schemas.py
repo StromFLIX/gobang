@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated
 
 from pydantic import BaseModel, EmailStr, Field, StringConstraints
@@ -5,6 +6,14 @@ from pydantic import BaseModel, EmailStr, Field, StringConstraints
 from app.clients.pocketbase import GuestSession, PlayerSession
 from app.domain.game import Game, GameStatus, Move, Player
 from app.domain.rules import Stone
+from app.services.games import (
+    HeadToHeadEntry,
+    Leaderboard,
+    LeaderboardEntry,
+    LeaderboardResult,
+    Performance,
+    PeriodPerformance,
+)
 
 DisplayName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=24)]
 AvatarSeed = Annotated[
@@ -131,6 +140,100 @@ class GameResponse(BaseModel):
             guest_score=game.guest_score,
             host_rematch=game.host_rematch,
             guest_rematch=game.guest_rematch,
+        )
+
+
+class PerformanceResponse(BaseModel):
+    wins: int
+    losses: int
+    draws: int
+    games_played: int
+    win_rate: float
+
+    @classmethod
+    def from_domain(cls, performance: Performance) -> "PerformanceResponse":
+        games_played = performance.games_played
+        return cls(
+            wins=performance.wins,
+            losses=performance.losses,
+            draws=performance.draws,
+            games_played=games_played,
+            win_rate=round(performance.wins / games_played * 100, 1) if games_played else 0,
+        )
+
+
+class PeriodPerformanceResponse(BaseModel):
+    last_7_days: PerformanceResponse
+    all_time: PerformanceResponse
+
+    @classmethod
+    def from_domain(cls, performance: PeriodPerformance) -> "PeriodPerformanceResponse":
+        return cls(
+            last_7_days=PerformanceResponse.from_domain(performance.last_7_days),
+            all_time=PerformanceResponse.from_domain(performance.all_time),
+        )
+
+
+class LeaderboardEntryResponse(BaseModel):
+    player: PlayerResponse
+    performance: PeriodPerformanceResponse
+
+    @classmethod
+    def from_domain(cls, entry: LeaderboardEntry) -> "LeaderboardEntryResponse":
+        return cls(
+            player=PlayerResponse.from_domain(entry.player),
+            performance=PeriodPerformanceResponse.from_domain(entry.performance),
+        )
+
+
+class HeadToHeadResponse(BaseModel):
+    opponent: PlayerResponse
+    performance: PeriodPerformanceResponse
+
+    @classmethod
+    def from_domain(cls, entry: HeadToHeadEntry) -> "HeadToHeadResponse":
+        return cls(
+            opponent=PlayerResponse.from_domain(entry.opponent),
+            performance=PeriodPerformanceResponse.from_domain(entry.performance),
+        )
+
+
+class LeaderboardResultResponse(BaseModel):
+    round: int
+    completed_at: datetime
+    status: GameStatus
+    host: PlayerResponse
+    guest: PlayerResponse
+    winner: PlayerResponse | None
+
+    @classmethod
+    def from_domain(cls, result: LeaderboardResult) -> "LeaderboardResultResponse":
+        return cls(
+            round=result.round,
+            completed_at=result.completed_at,
+            status=result.status,
+            host=PlayerResponse.from_domain(result.host),
+            guest=PlayerResponse.from_domain(result.guest),
+            winner=PlayerResponse.from_domain(result.winner) if result.winner else None,
+        )
+
+
+class LeaderboardResponse(BaseModel):
+    player: LeaderboardEntryResponse
+    overall: list[LeaderboardEntryResponse]
+    opponents: list[HeadToHeadResponse]
+    results: list[LeaderboardResultResponse]
+
+    @classmethod
+    def from_domain(cls, leaderboard: Leaderboard) -> "LeaderboardResponse":
+        return cls(
+            player=LeaderboardEntryResponse.from_domain(leaderboard.player),
+            overall=[LeaderboardEntryResponse.from_domain(entry) for entry in leaderboard.overall],
+            opponents=[HeadToHeadResponse.from_domain(entry) for entry in leaderboard.opponents],
+            results=[
+                LeaderboardResultResponse.from_domain(result)
+                for result in leaderboard.results
+            ],
         )
 
 

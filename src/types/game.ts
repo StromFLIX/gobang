@@ -45,6 +45,45 @@ export interface Game {
   guest_rematch: boolean
 }
 
+export interface Performance {
+  wins: number
+  losses: number
+  draws: number
+  games_played: number
+  win_rate: number
+}
+
+export interface PeriodPerformance {
+  last_7_days: Performance
+  all_time: Performance
+}
+
+export interface LeaderboardEntry {
+  player: Player
+  performance: PeriodPerformance
+}
+
+export interface HeadToHeadEntry {
+  opponent: Player
+  performance: PeriodPerformance
+}
+
+export interface LeaderboardResult {
+  round: number
+  completed_at: string
+  status: GameStatus
+  host: Player
+  guest: Player
+  winner: Player | null
+}
+
+export interface Leaderboard {
+  player: LeaderboardEntry
+  overall: LeaderboardEntry[]
+  opponents: HeadToHeadEntry[]
+  results: LeaderboardResult[]
+}
+
 export interface AuthSession {
   token: string
   player: Player

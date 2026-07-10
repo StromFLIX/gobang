@@ -2,10 +2,11 @@ import asyncio
 from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import pytest
 
-from app.domain.game import Game, GameStatus, Player
+from app.domain.game import Game, GameStatus, Player, RoundResult
 from app.domain.rules import Stone
 from app.services.games import (
     GameConflict,
@@ -40,6 +41,9 @@ class MemoryRepository:
     async def list_for_player(self, player_id: str) -> Sequence[Game]:
         return [deepcopy(game) for game in self.games.values() if player_id in game.player_ids()]
 
+    async def list_all(self) -> Sequence[Game]:
+        return [deepcopy(game) for game in self.games.values()]
+
     async def update(self, game: Game, expected_revision: int) -> Game:
         stored = self.games[game.id]
         if stored.revision != expected_revision:
@@ -51,6 +55,7 @@ class MemoryRepository:
 HOST = Player(id="host", display_name="Flo", avatar_seed="flo")
 GUEST = Player(id="guest", display_name="Felix", avatar_seed="felix")
 THIRD = Player(id="third", display_name="Other", avatar_seed="other")
+COMPLETED_AT = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -64,6 +69,7 @@ def service(repository: MemoryRepository) -> GameService:
         repository,
         choose_host_black=lambda: True,
         create_invite_code=lambda: "invite-code",
+        now=lambda: COMPLETED_AT,
     )
 
 
@@ -137,6 +143,11 @@ async def test_resign_awards_point_and_rematch_swaps_sides(service: GameService)
     assert resigned.status is GameStatus.RESIGNED
     assert resigned.winner_player_id == GUEST.id
     assert resigned.guest_score == 1
+    assert len(resigned.round_results) == 1
+    assert resigned.round_results[0].round == 1
+    assert resigned.round_results[0].completed_at == COMPLETED_AT
+    assert resigned.round_results[0].status is GameStatus.RESIGNED
+    assert resigned.round_results[0].winner_player_id == GUEST.id
 
     waiting = await service.set_rematch(resigned.id, HOST.id, True)
     assert waiting.host_rematch is True
@@ -147,6 +158,7 @@ async def test_resign_awards_point_and_rematch_swaps_sides(service: GameService)
     assert rematch.black_player_id == GUEST.id
     assert rematch.white_player_id == HOST.id
     assert rematch.guest_score == 1
+    assert rematch.round_results == resigned.round_results
     assert not any(rematch.board)
 
 
@@ -166,3 +178,46 @@ async def test_cannot_rematch_active_game(service: GameService) -> None:
 
     with pytest.raises(GameInvalidAction, match="after"):
         await service.set_rematch(game.id, HOST.id, True)
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_combines_recent_and_legacy_results(
+    service: GameService, repository: MemoryRepository
+) -> None:
+    repository.games["history"] = Game(
+        id="history",
+        invite_code="history-code",
+        host=HOST,
+        guest=GUEST,
+        host_score=2,
+        guest_score=1,
+        round=5,
+        round_results=[
+            RoundResult(
+                round=1,
+                completed_at=datetime(2026, 7, 2, 12, 0, tzinfo=UTC),
+                status=GameStatus.WON,
+                winner_player_id=HOST.id,
+            ),
+            RoundResult(
+                round=3,
+                completed_at=datetime(2026, 7, 9, 12, 0, tzinfo=UTC),
+                status=GameStatus.RESIGNED,
+                winner_player_id=GUEST.id,
+            ),
+        ],
+    )
+
+    leaderboard = await service.leaderboard(HOST)
+
+    host = next(entry for entry in leaderboard.overall if entry.player.id == HOST.id)
+    assert (
+        host.performance.all_time.wins,
+        host.performance.all_time.losses,
+        host.performance.all_time.draws,
+    ) == (2, 1, 1)
+    assert (host.performance.last_7_days.wins, host.performance.last_7_days.losses) == (0, 1)
+    assert len(leaderboard.opponents) == 1
+    assert leaderboard.opponents[0].opponent == GUEST
+    assert leaderboard.opponents[0].performance.all_time.games_played == 4
+    assert leaderboard.results[0].winner == GUEST

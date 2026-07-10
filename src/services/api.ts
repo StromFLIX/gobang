@@ -1,4 +1,4 @@
-import type { AuthSession, Game, GuestSession, Player } from '@/types/game'
+import type { AuthSession, Game, GuestSession, Leaderboard, Player } from '@/types/game'
 
 export class ApiError extends Error {
   constructor(
@@ -48,6 +48,7 @@ export const api = {
     ),
   register: (email: string, password: string) =>
     request<AuthSession>('/api/auth/register', json('POST', { email, password })),
+  getLeaderboard: () => request<Leaderboard>('/api/leaderboard'),
   listGames: () => request<Game[]>('/api/games'),
   createGame: () => request<Game>('/api/games', json('POST')),
   joinGame: (inviteCode: string) =>

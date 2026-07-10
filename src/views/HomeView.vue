@@ -13,10 +13,11 @@ import { RouterLink, useRouter } from 'vue-router'
 
 import AvatarImage from '@/components/AvatarImage.vue'
 import AvatarPicker from '@/components/AvatarPicker.vue'
+import LeaderboardPanel from '@/components/LeaderboardPanel.vue'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
 import { ApiError, api } from '@/services/api'
-import type { Game } from '@/types/game'
+import type { Game, Leaderboard } from '@/types/game'
 
 const router = useRouter()
 const {
@@ -34,6 +35,9 @@ const displayName = ref('')
 const avatarSeed = ref<string>(AVATAR_PRESETS[0])
 const inviteCode = ref('')
 const games = ref<Game[]>([])
+const leaderboard = ref<Leaderboard | null>(null)
+const leaderboardLoading = ref(false)
+const leaderboardError = ref('')
 const busy = ref(false)
 const pageError = ref('')
 const authOpen = ref(false)
@@ -55,7 +59,7 @@ watch(
 
 onMounted(async () => {
   await bootstrapSession()
-  await loadGames()
+  await Promise.all([loadGames(), loadLeaderboard()])
 })
 
 async function loadGames() {
@@ -63,6 +67,18 @@ async function loadGames() {
     games.value = (await api.listGames()).filter((game) => game.status !== 'cancelled')
   } catch {
     games.value = []
+  }
+}
+
+async function loadLeaderboard() {
+  leaderboardLoading.value = true
+  leaderboardError.value = ''
+  try {
+    leaderboard.value = await api.getLeaderboard()
+  } catch {
+    leaderboardError.value = 'Standings are unavailable.'
+  } finally {
+    leaderboardLoading.value = false
   }
 }
 
@@ -134,7 +150,7 @@ async function submitAuth() {
       await login(email.value, password.value)
     }
     authOpen.value = false
-    await loadGames()
+    await Promise.all([loadGames(), loadLeaderboard()])
   } catch (error) {
     authError.value = error instanceof ApiError ? error.message : 'Could not sign in.'
   } finally {
@@ -145,6 +161,7 @@ async function submitAuth() {
 async function signOut() {
   await logout()
   games.value = []
+  await loadLeaderboard()
 }
 
 function opponentName(game: Game) {
@@ -295,6 +312,14 @@ function gameLabel(game: Game) {
           </RouterLink>
         </div>
       </section>
+
+      <LeaderboardPanel
+        :leaderboard="leaderboard"
+        :player-id="player.id"
+        :loading="leaderboardLoading"
+        :error="leaderboardError"
+        @retry="loadLeaderboard"
+      />
     </main>
 
     <main v-else class="loading-screen" aria-live="polite">

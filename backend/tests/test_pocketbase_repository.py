@@ -1,6 +1,7 @@
 from dataclasses import replace
+from datetime import UTC, datetime
 
-from app.domain.game import Game, GameStatus, Move, Player
+from app.domain.game import Game, GameStatus, Move, Player, RoundResult
 from app.domain.rules import Stone, empty_board
 from app.repositories.pocketbase_games import game_from_record, game_to_record
 
@@ -27,6 +28,14 @@ def test_game_record_round_trip() -> None:
         host_score=1,
         guest_score=2,
         host_rematch=True,
+        round_results=[
+            RoundResult(
+                round=1,
+                completed_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+                status=GameStatus.RESIGNED,
+                winner_player_id=guest.id,
+            )
+        ],
     )
 
     payload = game_to_record(game)

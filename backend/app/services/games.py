@@ -1,9 +1,11 @@
 import asyncio
 import secrets
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
-from app.domain.game import Game, GameStatus, Move, Player
+from app.domain.game import Game, GameStatus, Move, Player, RoundResult
 from app.domain.rules import MoveError, Stone, apply_move, empty_board
 
 
@@ -27,6 +29,53 @@ class GameInvalidAction(GameServiceError):
     pass
 
 
+@dataclass(slots=True)
+class Performance:
+    wins: int = 0
+    losses: int = 0
+    draws: int = 0
+
+    @property
+    def games_played(self) -> int:
+        return self.wins + self.losses + self.draws
+
+
+@dataclass(slots=True)
+class PeriodPerformance:
+    last_7_days: Performance = field(default_factory=Performance)
+    all_time: Performance = field(default_factory=Performance)
+
+
+@dataclass(frozen=True, slots=True)
+class LeaderboardEntry:
+    player: Player
+    performance: PeriodPerformance
+
+
+@dataclass(frozen=True, slots=True)
+class HeadToHeadEntry:
+    opponent: Player
+    performance: PeriodPerformance
+
+
+@dataclass(frozen=True, slots=True)
+class LeaderboardResult:
+    round: int
+    completed_at: datetime
+    status: GameStatus
+    host: Player
+    guest: Player
+    winner: Player | None
+
+
+@dataclass(frozen=True, slots=True)
+class Leaderboard:
+    player: LeaderboardEntry
+    overall: tuple[LeaderboardEntry, ...]
+    opponents: tuple[HeadToHeadEntry, ...]
+    results: tuple[LeaderboardResult, ...]
+
+
 class GameRepository(Protocol):
     async def create(self, game: Game) -> Game: ...
 
@@ -35,6 +84,8 @@ class GameRepository(Protocol):
     async def get_by_invite(self, invite_code: str) -> Game | None: ...
 
     async def list_for_player(self, player_id: str) -> Sequence[Game]: ...
+
+    async def list_all(self) -> Sequence[Game]: ...
 
     async def update(self, game: Game, expected_revision: int) -> Game: ...
 
@@ -46,10 +97,12 @@ class GameService:
         *,
         choose_host_black: Callable[[], bool] | None = None,
         create_invite_code: Callable[[], str] | None = None,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
         self._choose_host_black = choose_host_black or (lambda: secrets.randbelow(2) == 0)
         self._create_invite_code = create_invite_code or (lambda: secrets.token_urlsafe(8))
+        self._now = now or (lambda: datetime.now(UTC))
         self._locks: dict[str, asyncio.Lock] = {}
 
     async def create(self, host: Player) -> Game:
@@ -94,6 +147,121 @@ class GameService:
     async def list_for_player(self, player_id: str) -> Sequence[Game]:
         return await self._repository.list_for_player(player_id)
 
+    async def leaderboard(self, player: Player) -> Leaderboard:
+        games = await self._repository.list_all()
+        window_start = self._now() - timedelta(days=7)
+        profiles = {player.id: player}
+        overall: dict[str, PeriodPerformance] = {}
+        opponents: dict[str, PeriodPerformance] = {}
+        results: list[LeaderboardResult] = []
+
+        for game in games:
+            if game.guest is None:
+                continue
+            profiles.setdefault(game.host.id, game.host)
+            profiles.setdefault(game.guest.id, game.guest)
+            host_recorded_wins = 0
+            guest_recorded_wins = 0
+
+            for result in game.round_results:
+                self._record_outcome(
+                    overall.setdefault(game.host.id, PeriodPerformance()).all_time,
+                    overall.setdefault(game.guest.id, PeriodPerformance()).all_time,
+                    result.winner_player_id,
+                    game.host.id,
+                    game.guest.id,
+                )
+                if result.completed_at >= window_start:
+                    self._record_outcome(
+                        overall[game.host.id].last_7_days,
+                        overall[game.guest.id].last_7_days,
+                        result.winner_player_id,
+                        game.host.id,
+                        game.guest.id,
+                    )
+                self._record_personal_outcome(
+                    opponents,
+                    player.id,
+                    game,
+                    result.winner_player_id,
+                    result.completed_at >= window_start,
+                )
+                if result.winner_player_id == game.host.id:
+                    host_recorded_wins += 1
+                elif result.winner_player_id == game.guest.id:
+                    guest_recorded_wins += 1
+                results.append(
+                    LeaderboardResult(
+                        round=result.round,
+                        completed_at=result.completed_at,
+                        status=result.status,
+                        host=game.host,
+                        guest=game.guest,
+                        winner=self._winner(game, result.winner_player_id),
+                    )
+                )
+
+            host_legacy_wins = max(0, game.host_score - host_recorded_wins)
+            guest_legacy_wins = max(0, game.guest_score - guest_recorded_wins)
+            legacy_draws = max(
+                0,
+                self._completed_rounds(game)
+                - len(game.round_results)
+                - host_legacy_wins
+                - guest_legacy_wins,
+            )
+            self._add_wins(
+                overall.setdefault(game.host.id, PeriodPerformance()).all_time,
+                overall.setdefault(game.guest.id, PeriodPerformance()).all_time,
+                host_legacy_wins,
+            )
+            self._add_wins(
+                overall[game.guest.id].all_time,
+                overall[game.host.id].all_time,
+                guest_legacy_wins,
+            )
+            overall[game.host.id].all_time.draws += legacy_draws
+            overall[game.guest.id].all_time.draws += legacy_draws
+            self._add_personal_legacy_wins(
+                opponents,
+                player.id,
+                game,
+                host_legacy_wins,
+                guest_legacy_wins,
+                legacy_draws,
+            )
+
+        overall.setdefault(player.id, PeriodPerformance())
+        entries = [
+            LeaderboardEntry(player=profiles[player_id], performance=performance)
+            for player_id, performance in overall.items()
+        ]
+        entries.sort(
+            key=lambda entry: (
+                -entry.performance.all_time.wins,
+                -entry.performance.all_time.games_played,
+                entry.player.display_name.casefold(),
+            )
+        )
+        opponent_entries = [
+            HeadToHeadEntry(opponent=profiles[opponent_id], performance=performance)
+            for opponent_id, performance in opponents.items()
+        ]
+        opponent_entries.sort(
+            key=lambda entry: (
+                -entry.performance.all_time.games_played,
+                entry.opponent.display_name.casefold(),
+            )
+        )
+        results.sort(key=lambda result: result.completed_at, reverse=True)
+        personal = next(entry for entry in entries if entry.player.id == player.id)
+        return Leaderboard(
+            player=personal,
+            overall=tuple(entries),
+            opponents=tuple(opponent_entries),
+            results=tuple(results[:50]),
+        )
+
     async def move(
         self,
         game_id: str,
@@ -137,8 +305,10 @@ class GameService:
                 game.status = GameStatus.WON
                 game.winner_player_id = player_id
                 self._award_point(game, player_id)
+                self._record_result(game)
             elif result.is_draw:
                 game.status = GameStatus.DRAW
+                self._record_result(game)
             else:
                 game.turn = moving_stone.opponent
             game.revision += 1
@@ -169,6 +339,7 @@ class GameService:
             game.resigned_by_id = player_id
             game.winner_player_id = winner_id
             self._award_point(game, winner_id)
+            self._record_result(game)
             game.revision += 1
             return await self._repository.update(game, previous_revision)
 
@@ -226,3 +397,98 @@ class GameService:
             game.host_score += 1
         else:
             game.guest_score += 1
+
+    def _record_result(self, game: Game) -> None:
+        game.round_results.append(
+            RoundResult(
+                round=game.round,
+                completed_at=self._now(),
+                status=game.status,
+                winner_player_id=game.winner_player_id,
+            )
+        )
+
+    @staticmethod
+    def _record_outcome(
+        host: Performance,
+        guest: Performance,
+        winner_player_id: str | None,
+        host_id: str,
+        guest_id: str,
+    ) -> None:
+        if winner_player_id == host_id:
+            host.wins += 1
+            guest.losses += 1
+        elif winner_player_id == guest_id:
+            guest.wins += 1
+            host.losses += 1
+        else:
+            host.draws += 1
+            guest.draws += 1
+
+    @staticmethod
+    def _add_wins(winner: Performance, loser: Performance, count: int) -> None:
+        winner.wins += count
+        loser.losses += count
+
+    def _record_personal_outcome(
+        self,
+        opponents: dict[str, PeriodPerformance],
+        player_id: str,
+        game: Game,
+        winner_player_id: str | None,
+        within_window: bool,
+    ) -> None:
+        opponent_id = game.opponent_of(player_id)
+        if opponent_id is None:
+            return
+        performance = opponents.setdefault(opponent_id, PeriodPerformance())
+        self._record_personal(performance.all_time, player_id, winner_player_id)
+        if within_window:
+            self._record_personal(performance.last_7_days, player_id, winner_player_id)
+
+    @staticmethod
+    def _record_personal(
+        performance: Performance, player_id: str, winner_player_id: str | None
+    ) -> None:
+        if winner_player_id == player_id:
+            performance.wins += 1
+        elif winner_player_id is None:
+            performance.draws += 1
+        else:
+            performance.losses += 1
+
+    def _add_personal_legacy_wins(
+        self,
+        opponents: dict[str, PeriodPerformance],
+        player_id: str,
+        game: Game,
+        host_wins: int,
+        guest_wins: int,
+        draws: int,
+    ) -> None:
+        opponent_id = game.opponent_of(player_id)
+        if opponent_id is None:
+            return
+        performance = opponents.setdefault(opponent_id, PeriodPerformance()).all_time
+        if player_id == game.host.id:
+            self._add_wins(performance, Performance(), host_wins)
+            performance.losses += guest_wins
+        else:
+            self._add_wins(performance, Performance(), guest_wins)
+            performance.losses += host_wins
+        performance.draws += draws
+
+    @staticmethod
+    def _completed_rounds(game: Game) -> int:
+        if game.status in {GameStatus.WON, GameStatus.DRAW, GameStatus.RESIGNED}:
+            return game.round
+        return max(0, game.round - 1)
+
+    @staticmethod
+    def _winner(game: Game, winner_player_id: str | None) -> Player | None:
+        if winner_player_id == game.host.id:
+            return game.host
+        if game.guest and winner_player_id == game.guest.id:
+            return game.guest
+        return None
