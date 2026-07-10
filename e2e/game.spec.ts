@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function configurePlayer(page: Page, name: string, glasses: string) {
   await page.goto('/')
-  await expect(page.getByText('Ready your player.')).toBeVisible()
+  await expect(page.getByText('Your games.')).toBeVisible()
   await page.locator('#player-name').fill(name)
   await page.getByLabel('Glasses').selectOption(glasses)
 }
@@ -14,15 +14,15 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   const guest = await guestContext.newPage()
 
   await configurePlayer(host, 'Host player', 'glasses3')
-  await host.getByRole('button', { name: 'New room' }).click()
+  await host.getByRole('button', { name: 'Start game' }).click()
   await expect(host).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
-  await expect(host.getByText('Room is open')).toBeVisible()
+  await expect(host.getByText('Game is open')).toBeVisible()
 
   await guest.goto(host.url())
   await expect(guest.getByText('Choose your player.')).toBeVisible()
   await guest.locator('#join-player-name').fill('Guest player')
   await guest.getByLabel('Hair', { exact: true }).selectOption('bun')
-  await guest.getByRole('button', { name: 'Join room' }).click()
+  await guest.getByRole('button', { name: 'Join game' }).click()
 
   await expect(host.getByText('Guest player', { exact: true })).toBeVisible()
   await expect(guest.getByText('Host player', { exact: true })).toBeVisible()
@@ -44,6 +44,10 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   await expect(
     waitingPage.getByRole('gridcell', { name: 'Row 1, column 2', exact: true }),
   ).toBeEnabled()
+  await waitingPage.getByRole('link', { name: 'Back to lobby' }).click()
+  await expect(waitingPage.getByText('Waiting on you')).toBeVisible()
+  await expect(waitingPage.locator('.presence-dot--turn.presence-dot--pulse')).toBeVisible()
+  await waitingPage.screenshot({ path: 'test-results/current-opponents.png', fullPage: true })
   await host.screenshot({ path: 'test-results/realtime-desktop.png', fullPage: true })
 
   await hostContext.close()
@@ -60,11 +64,11 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
 
   await configurePlayer(page, 'Mobile player', 'sunglasses')
   await page.getByRole('button', { name: 'Save player' }).click()
-  await expect(page.getByRole('button', { name: 'Edit player' })).toBeVisible()
+  await expect(page.locator('.profile-tool')).toBeHidden()
   await page.getByRole('button', { name: 'Edit player' }).click()
   await expect(page.locator('#player-name')).toHaveValue('Mobile player')
   await page.getByRole('button', { name: 'Cancel' }).click()
-  await expect(page.getByRole('button', { name: 'Edit player' })).toBeVisible()
+  await expect(page.locator('.profile-tool')).toBeHidden()
   expect(await page.evaluate(() => navigator.maxTouchPoints)).toBeGreaterThan(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: 'test-results/mobile-lobby.png' })
@@ -72,7 +76,7 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   await page.screenshot({ path: 'test-results/mobile-leaderboard.png' })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
-  await page.getByRole('button', { name: 'New room' }).click()
+  await page.getByRole('button', { name: 'Start game' }).click()
   await expect(page).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
   const board = page.getByRole('grid', { name: 'Gobang board' })
   await expect(board).toBeVisible()
@@ -91,7 +95,7 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   await expect(opponent.getByText('Choose your player.')).toBeVisible()
   await opponent.locator('#join-player-name').fill('Mobile opponent')
   await opponent.getByLabel('Facial hair').selectOption('moustache4')
-  await opponent.getByRole('button', { name: 'Join room' }).click()
+  await opponent.getByRole('button', { name: 'Join game' }).click()
 
   const mobileFirstPoint = page.getByRole('gridcell', {
     name: 'Row 1, column 1',
@@ -140,36 +144,37 @@ test('an upgraded guest can continue from another device', async ({ browser }) =
   const password = 'BrowserPass42!'
 
   await configurePlayer(firstDevice, 'Cross-device player', 'glasses5')
-  await firstDevice.getByRole('button', { name: 'New room' }).click()
-  await expect(firstDevice.getByText('Room is open')).toBeVisible()
+  await firstDevice.getByRole('button', { name: 'Start game' }).click()
+  await expect(firstDevice.getByText('Game is open')).toBeVisible()
   const roomPath = new URL(firstDevice.url()).pathname
   await firstDevice.getByRole('link', { name: 'Back to lobby' }).click()
 
-  await firstDevice.locator('.account-summary').getByRole('button', { name: 'Save progress' }).click()
-  const registerDialog = firstDevice.getByRole('dialog', { name: 'Save your progress' })
+  await firstDevice.locator('.account-summary').getByRole('button', { name: 'Sign in' }).click()
+  const registerDialog = firstDevice.getByRole('dialog')
+  await registerDialog.getByRole('button', { name: 'Create account' }).click()
+  await expect(registerDialog).toHaveAccessibleName('Create account')
   await registerDialog.getByLabel('Email').fill(email)
   await registerDialog.getByLabel('Password', { exact: true }).fill(password)
   await registerDialog.getByLabel('Confirm password').fill(password)
   await registerDialog
     .locator('form')
-    .getByRole('button', { name: 'Save progress' })
+    .getByRole('button', { name: 'Create account' })
     .click()
-  await expect(firstDevice.getByText('Account', { exact: true })).toBeVisible()
+  await expect(firstDevice.getByRole('button', { name: 'Sign out' })).toBeVisible()
   await expect(firstDevice.locator(`a[href="${roomPath}"]`)).toBeVisible()
 
   const secondContext = await browser.newContext({ viewport: { width: 1200, height: 850 } })
   const secondDevice = await secondContext.newPage()
   await secondDevice.goto('/')
-  await expect(secondDevice.getByText('Ready your player.')).toBeVisible()
-  await secondDevice.locator('.account-summary').getByRole('button', { name: 'Save progress' }).click()
+  await expect(secondDevice.getByText('Your games.')).toBeVisible()
+  await secondDevice.locator('.account-summary').getByRole('button', { name: 'Sign in' }).click()
   const loginDialog = secondDevice.getByRole('dialog')
-  await loginDialog.getByRole('button', { name: 'Sign in' }).click()
   await loginDialog.getByLabel('Email').fill(email)
   await loginDialog.getByLabel('Password').fill(password)
   await loginDialog.locator('form').getByRole('button', { name: 'Sign in' }).click()
 
   await expect(secondDevice.locator('.account-summary__name')).toHaveText('Cross-device player')
-  await expect(secondDevice.getByText('Account', { exact: true })).toBeVisible()
+  await expect(secondDevice.getByRole('button', { name: 'Sign out' })).toBeVisible()
   await expect(secondDevice.locator(`a[href="${roomPath}"]`)).toBeVisible()
 
   await firstContext.close()
@@ -183,17 +188,21 @@ test('a finished round appears in personal leaderboard history', async ({ browse
   const guest = await guestContext.newPage()
 
   await configurePlayer(host, 'Leaderboard host', 'glasses3')
-  await host.getByRole('button', { name: 'New room' }).click()
+  await host.getByRole('button', { name: 'Start game' }).click()
   await expect(host).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
   await guest.goto(host.url())
   await guest.locator('#join-player-name').fill('Leaderboard friend')
-  await guest.getByRole('button', { name: 'Join room' }).click()
+  await guest.getByRole('button', { name: 'Join game' }).click()
   await expect(host.getByText('Leaderboard friend', { exact: true })).toBeVisible()
 
   await host.getByRole('button', { name: 'Resign', exact: true }).click()
   await host.getByRole('button', { name: 'Confirm resign' }).click()
   await expect(host.getByRole('heading', { name: 'Leaderboard friend wins' })).toBeVisible()
   await host.getByRole('link', { name: 'Back to lobby' }).click()
+  await guest.getByRole('button', { name: 'Ready for rematch' }).click()
+  await expect(host.getByText('Wants rematch')).toBeVisible()
+  await expect(host.locator('.presence-dot--rematch')).toBeVisible()
+  await expect(host.locator('.presence-dot--rematch')).not.toHaveClass(/presence-dot--pulse/)
 
   await expect(host.getByRole('heading', { name: 'Leaderboard' })).toBeVisible()
   await expect(host.locator('.personal-summary')).toContainText('0–1–0')

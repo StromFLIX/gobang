@@ -20,6 +20,7 @@ import AvatarPicker from '@/components/AvatarPicker.vue'
 import GridComponent from '@/components/GridComponent.vue'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
+import { shortPlayerId } from '@/logic/games'
 import { ApiError, api } from '@/services/api'
 import { subscribeToGame } from '@/services/pocketbase'
 import type { Game, Player, Stone } from '@/types/game'
@@ -79,7 +80,7 @@ const statusLabel = computed(() => {
   if (!game.value) return ''
   if (game.value.status === 'waiting') return 'Waiting for player two'
   if (game.value.status === 'draw') return 'Draw'
-  if (game.value.status === 'cancelled') return 'Room cancelled'
+  if (game.value.status === 'cancelled') return 'Game cancelled'
   if (game.value.status === 'won' || game.value.status === 'resigned') {
     const winner = playerById(game.value.winner_player_id)
     return winner ? `${winner.display_name} wins` : 'Round finished'
@@ -138,10 +139,10 @@ async function joinRoom() {
   } catch (error) {
     pageError.value =
       error instanceof ApiError && error.status === 404
-        ? 'This room is unavailable or already full.'
+        ? 'This game is unavailable or already full.'
         : error instanceof ApiError
           ? error.message
-          : 'Could not open the room.'
+          : 'Could not open the game.'
   } finally {
     loading.value = false
   }
@@ -197,7 +198,7 @@ async function playMove(position: number) {
 async function shareRoom() {
   const url = window.location.href
   try {
-    if (navigator.share) await navigator.share({ title: 'Gobang room', url })
+    if (navigator.share) await navigator.share({ title: 'Gobang game', url })
     else {
       await navigator.clipboard.writeText(url)
       copied.value = true
@@ -272,8 +273,8 @@ function stoneFor(playerId: string): Stone | null {
           v-if="game"
           type="button"
           class="icon-button icon-button--muted"
-          :title="copied ? 'Copied' : 'Share room'"
-          :aria-label="copied ? 'Room link copied' : 'Share room'"
+          :title="copied ? 'Copied' : 'Share game'"
+          :aria-label="copied ? 'Game link copied' : 'Share game'"
           @click="shareRoom"
         >
           <Check v-if="copied" :size="18" />
@@ -284,7 +285,7 @@ function stoneFor(playerId: string): Stone | null {
 
     <main v-if="loading || !ready" class="loading-screen" aria-live="polite">
       <span class="loading-mark"><Grid3X3 :size="28" /></span>
-      <p>Opening room…</p>
+      <p>Opening game…</p>
     </main>
 
     <main v-else-if="!profileConfigured && player" class="profile-gate">
@@ -304,14 +305,14 @@ function stoneFor(playerId: string): Stone | null {
         <AvatarPicker v-model="avatarSeed" />
         <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
         <button type="button" class="button button--primary" :disabled="pending" @click="completeProfile">
-          Join room
+          Join game
         </button>
       </section>
     </main>
 
     <main v-else-if="pageError || !game" class="room-error">
       <Grid3X3 :size="36" />
-      <h1>Room unavailable</h1>
+      <h1>Game unavailable</h1>
       <p>{{ pageError }}</p>
       <RouterLink to="/" class="button button--primary"><House :size="18" /> Lobby</RouterLink>
     </main>
@@ -326,6 +327,7 @@ function stoneFor(playerId: string): Stone | null {
               <em v-if="game.status === 'active' && game.turn === 'black'" class="turn-label">Turn</em>
             </span>
             <strong>{{ blackPlayer?.display_name ?? 'Waiting' }}</strong>
+            <small v-if="blackPlayer" class="player-short-id">{{ shortPlayerId(blackPlayer.id) }}</small>
           </div>
           <span class="capture-count"><small>Pairs</small><strong>{{ game.black_captures }}</strong></span>
         </div>
@@ -338,6 +340,7 @@ function stoneFor(playerId: string): Stone | null {
               White
             </span>
             <strong>{{ whitePlayer?.display_name ?? 'Waiting' }}</strong>
+            <small v-if="whitePlayer" class="player-short-id">{{ shortPlayerId(whitePlayer.id) }}</small>
           </div>
           <AvatarImage :seed="whitePlayer?.avatar_seed ?? 'white'" color="white" size="medium" />
         </div>
@@ -363,18 +366,18 @@ function stoneFor(playerId: string): Stone | null {
         <aside class="game-actions">
           <div v-if="game.status === 'waiting'" class="action-block">
             <p class="section-kicker">Invite</p>
-            <h2>Room is open</h2>
+            <h2>Game is open</h2>
             <div class="invite-code">
               <code>{{ game.invite_code }}</code>
-              <button type="button" class="icon-button icon-button--muted" title="Copy link" aria-label="Copy room link" @click="shareRoom">
+              <button type="button" class="icon-button icon-button--muted" title="Copy link" aria-label="Copy game link" @click="shareRoom">
                 <Copy :size="18" />
               </button>
             </div>
             <button type="button" class="button button--secondary" @click="shareRoom">
-              <Share2 :size="18" /> Share room
+              <Share2 :size="18" /> Share game
             </button>
             <button v-if="isHost" type="button" class="button button--danger-quiet" @click="cancelRoom">
-              <X :size="18" /> Cancel room
+              <X :size="18" /> Cancel game
             </button>
           </div>
 

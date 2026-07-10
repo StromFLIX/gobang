@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import {
   ArrowRight,
+  ChevronDown,
+  ChevronUp,
   Grid3X3,
   Link2,
   LogIn,
   LogOut,
-  Pencil,
   Plus,
+  Users,
   X,
 } from '@lucide/vue'
-import { onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
 import AvatarImage from '@/components/AvatarImage.vue'
@@ -17,7 +19,15 @@ import AvatarPicker from '@/components/AvatarPicker.vue'
 import LeaderboardPanel from '@/components/LeaderboardPanel.vue'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
+import {
+  groupGamesByOpponent,
+  primaryGameFor,
+  shortPlayerId,
+  signalForGame,
+  type OpponentGameGroup,
+} from '@/logic/games'
 import { ApiError, api } from '@/services/api'
+import { subscribeToGame } from '@/services/pocketbase'
 import type { Game, Leaderboard } from '@/types/game'
 
 const router = useRouter()
@@ -49,6 +59,18 @@ const passwordConfirm = ref('')
 const authError = ref('')
 const profileEditing = ref(true)
 const profileSaving = ref(false)
+const showAllOpponents = ref(false)
+let gameUnsubscribes: (() => void)[] = []
+
+const opponentGroups = computed(() =>
+  player.value ? groupGamesByOpponent(games.value, player.value.id) : [],
+)
+const visibleOpponentGroups = computed(() =>
+  showAllOpponents.value ? opponentGroups.value : opponentGroups.value.slice(0, 5),
+)
+const waitingGames = computed(() =>
+  games.value.filter((game) => game.status === 'waiting' && !game.guest),
+)
 
 watch(
   player,
@@ -66,12 +88,42 @@ onMounted(async () => {
   await Promise.all([loadGames(), loadLeaderboard()])
 })
 
+onBeforeUnmount(clearGameSubscriptions)
+
 async function loadGames() {
   try {
     games.value = (await api.listGames()).filter((game) => game.status !== 'cancelled')
+    await syncGameSubscriptions()
   } catch {
     games.value = []
   }
+}
+
+async function syncGameSubscriptions() {
+  clearGameSubscriptions()
+  const subscriptions = await Promise.all(
+    games.value.map(async (game) => {
+      try {
+        return await subscribeToGame(game.id, updateLobbyGame)
+      } catch {
+        return null
+      }
+    }),
+  )
+  gameUnsubscribes = subscriptions.filter(
+    (unsubscribe): unsubscribe is () => void => unsubscribe !== null,
+  )
+}
+
+function clearGameSubscriptions() {
+  for (const unsubscribe of gameUnsubscribes) unsubscribe()
+  gameUnsubscribes = []
+}
+
+function updateLobbyGame(nextGame: Game) {
+  games.value = nextGame.status === 'cancelled'
+    ? games.value.filter((game) => game.id !== nextGame.id)
+    : [nextGame, ...games.value.filter((game) => game.id !== nextGame.id)]
 }
 
 async function loadLeaderboard() {
@@ -128,7 +180,7 @@ function cancelProfileEdit() {
   profileEditing.value = false
 }
 
-async function createRoom() {
+async function startGame() {
   if (busy.value || !(await ensureProfile())) return
   busy.value = true
   pageError.value = ''
@@ -136,7 +188,7 @@ async function createRoom() {
     const game = await api.createGame()
     await router.push(`/game/${game.invite_code}`)
   } catch (error) {
-    pageError.value = error instanceof ApiError ? error.message : 'Could not create the room.'
+    pageError.value = error instanceof ApiError ? error.message : 'Could not start the game.'
   } finally {
     busy.value = false
   }
@@ -148,11 +200,11 @@ function normalizedInviteCode() {
   return decodeURIComponent(match?.[1] ?? value)
 }
 
-async function joinRoom() {
+async function joinGame() {
   if (busy.value || !(await ensureProfile())) return
   const code = normalizedInviteCode()
   if (!code) {
-    pageError.value = 'Enter a room link or code.'
+    pageError.value = 'Enter a game link or code.'
     return
   }
   await router.push(`/game/${encodeURIComponent(code)}`)
@@ -190,23 +242,25 @@ async function submitAuth() {
 }
 
 async function signOut() {
+  clearGameSubscriptions()
   await logout()
   games.value = []
   profileEditing.value = true
   await loadLeaderboard()
 }
 
-function opponentName(game: Game) {
-  if (!player.value || !game.guest) return 'Waiting for player two'
-  return game.host.id === player.value.id ? game.guest.display_name : game.host.display_name
+function gameFor(group: OpponentGameGroup) {
+  return primaryGameFor(group, player.value?.id ?? '')
 }
 
-function gameLabel(game: Game) {
-  if (game.status === 'waiting') return 'Waiting'
-  const turnPlayerId = game.turn === 'black' ? game.black_player_id : game.white_player_id
-  if (game.status === 'active') return turnPlayerId === player.value?.id ? 'Your turn' : 'In progress'
-  if (game.status === 'draw') return 'Draw'
-  return game.winner_player_id === player.value?.id ? 'Won' : 'Finished'
+function gameSignal(group: OpponentGameGroup) {
+  return signalForGame(gameFor(group), player.value?.id ?? '')
+}
+
+function groupSummary(group: OpponentGameGroup) {
+  const count = group.games.length
+  const gamesLabel = count === 1 ? '1 game' : `${count} games together`
+  return `${gamesLabel} · Round ${gameFor(group).round}`
 }
 </script>
 
@@ -219,16 +273,27 @@ function gameLabel(game: Game) {
       </RouterLink>
 
       <div v-if="ready && player" class="account-summary">
-        <AvatarImage :seed="player.avatar_seed" size="small" />
-        <span class="account-summary__name">{{ player.display_name }}</span>
+        <button
+          type="button"
+          class="account-avatar-button"
+          title="Edit player"
+          aria-label="Edit player"
+          @click="editProfile"
+        >
+          <AvatarImage :seed="player.avatar_seed" size="small" />
+        </button>
+        <span class="account-summary__identity">
+          <strong class="account-summary__name">{{ player.display_name }}</strong>
+          <small>{{ shortPlayerId(player.id) }}</small>
+        </span>
         <button
           v-if="player.is_guest"
           type="button"
           class="button button--quiet"
-          @click="openAuth('register')"
+          @click="openAuth('login')"
         >
           <LogIn :size="17" />
-          Save progress
+          Sign in
         </button>
         <button
           v-else
@@ -245,11 +310,11 @@ function gameLabel(game: Game) {
 
     <main v-if="ready && player" class="lobby-layout">
       <section class="lobby-heading">
-        <p class="section-kicker">Private match</p>
-        <h1>Ready your player.</h1>
+        <p class="section-kicker">Gobang</p>
+        <h1>Your games.</h1>
       </section>
 
-      <section class="profile-tool" aria-labelledby="profile-title">
+      <section v-if="profileEditing" class="profile-tool profile-tool--editor" aria-labelledby="profile-title">
         <div class="section-heading-row">
           <div>
             <p class="section-kicker">Player</p>
@@ -258,85 +323,136 @@ function gameLabel(game: Game) {
           <span class="session-badge">{{ player.is_guest ? 'This device' : 'Account' }}</span>
         </div>
 
-        <template v-if="profileEditing">
-          <label class="field-label" for="player-name">Name</label>
-          <input
-            id="player-name"
-            v-model="displayName"
-            class="text-input"
-            maxlength="24"
-            autocomplete="nickname"
-            placeholder="Your name"
-            @change="pageError = ''"
-          />
+        <label class="field-label" for="player-name">Name</label>
+        <input
+          id="player-name"
+          v-model="displayName"
+          class="text-input"
+          maxlength="24"
+          autocomplete="nickname"
+          placeholder="Your name"
+          @change="pageError = ''"
+        />
 
-          <span class="field-label">Avatar</span>
-          <AvatarPicker v-model="avatarSeed" />
+        <span class="field-label">Avatar</span>
+        <AvatarPicker v-model="avatarSeed" />
 
-          <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
-          <div class="profile-actions">
-            <button
-              type="button"
-              class="button button--secondary"
-              :disabled="profileSaving"
-              @click="saveProfile"
-            >
-              Save player
-            </button>
-            <button
-              v-if="profileConfigured"
-              type="button"
-              class="button button--quiet"
-              :disabled="profileSaving"
-              @click="cancelProfileEdit"
-            >
-              Cancel
-            </button>
-          </div>
-        </template>
-
-        <template v-else>
-          <div class="locked-profile">
-            <AvatarImage :seed="player.avatar_seed" size="editor" />
-            <div>
-              <strong>{{ player.display_name }}</strong>
-              <span>{{ player.is_guest ? 'Saved on this device' : 'Progress saved to account' }}</span>
-            </div>
-          </div>
-          <div class="profile-actions">
-            <button type="button" class="button button--secondary" @click="editProfile">
-              <Pencil :size="17" />
-              Edit player
-            </button>
-            <button
-              v-if="player.is_guest"
-              type="button"
-              class="button button--quiet"
-              @click="openAuth('register')"
-            >
-              <LogIn :size="17" />
-              Save progress
-            </button>
-          </div>
-        </template>
+        <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
+        <div class="profile-actions">
+          <button
+            type="button"
+            class="button button--secondary"
+            :disabled="profileSaving"
+            @click="saveProfile"
+          >
+            Save player
+          </button>
+          <button
+            v-if="profileConfigured"
+            type="button"
+            class="button button--quiet"
+            :disabled="profileSaving"
+            @click="cancelProfileEdit"
+          >
+            Cancel
+          </button>
+        </div>
       </section>
 
-      <section class="room-tool" aria-labelledby="room-title">
+      <section class="recent-games" aria-labelledby="recent-title">
         <div class="section-heading-row">
           <div>
-            <p class="section-kicker">Match</p>
-            <h2 id="room-title">Open or join a room</h2>
+            <p class="section-kicker">Playing</p>
+            <h2 id="recent-title">Current opponents</h2>
+          </div>
+          <span v-if="opponentGroups.length" class="session-badge">
+            {{ opponentGroups.length }} {{ opponentGroups.length === 1 ? 'player' : 'players' }}
+          </span>
+        </div>
+
+        <div v-if="waitingGames.length || visibleOpponentGroups.length" class="game-list">
+          <RouterLink
+            v-for="game in waitingGames"
+            :key="game.id"
+            :to="`/game/${game.invite_code}`"
+            class="game-list-item"
+          >
+            <span class="waiting-game-avatar"><Users :size="18" /></span>
+            <div class="game-list-item__identity">
+              <strong>Waiting for a player</strong>
+              <span>Game ready to share</span>
+            </div>
+            <span class="game-presence">
+              <i class="presence-dot presence-dot--waiting" />
+              Waiting
+            </span>
+            <ArrowRight :size="18" />
+          </RouterLink>
+
+          <RouterLink
+            v-for="group in visibleOpponentGroups"
+            :key="group.opponent.id"
+            :to="`/game/${gameFor(group).invite_code}`"
+            class="game-list-item"
+          >
+            <AvatarImage :seed="group.opponent.avatar_seed" size="small" />
+            <div class="game-list-item__identity">
+              <strong>{{ group.opponent.display_name }}</strong>
+              <small>{{ shortPlayerId(group.opponent.id) }}</small>
+              <span>{{ groupSummary(group) }}</span>
+            </div>
+            <span class="game-presence">
+              <i
+                :class="[
+                  'presence-dot',
+                  `presence-dot--${gameSignal(group).tone}`,
+                  { 'presence-dot--pulse': gameSignal(group).pulse },
+                ]"
+              />
+              {{ gameSignal(group).label }}
+            </span>
+            <ArrowRight :size="18" />
+          </RouterLink>
+        </div>
+        <p v-else class="empty-game-list">No opponents yet. Start a game below.</p>
+
+        <button
+          v-if="opponentGroups.length > 5"
+          type="button"
+          class="show-games-button"
+          :aria-expanded="showAllOpponents"
+          @click="showAllOpponents = !showAllOpponents"
+        >
+          <ChevronUp v-if="showAllOpponents" :size="17" />
+          <ChevronDown v-else :size="17" />
+          {{ showAllOpponents ? 'Show top 5' : `Show ${opponentGroups.length - 5} more` }}
+        </button>
+      </section>
+
+      <div v-if="player.is_guest && profileConfigured" class="account-nudge">
+        <span>Sign in to keep these games when you switch devices.</span>
+        <button type="button" class="button button--quiet" @click="openAuth('login')">
+          <LogIn :size="16" />
+          Sign in
+        </button>
+      </div>
+
+      <section class="room-tool game-tool" aria-labelledby="game-tool-title">
+        <div class="section-heading-row">
+          <div>
+            <p class="section-kicker">Game</p>
+            <h2 id="game-tool-title">Start or join a game</h2>
           </div>
         </div>
 
-        <button type="button" class="button button--primary create-room" :disabled="busy" @click="createRoom">
+        <button type="button" class="button button--primary create-room" :disabled="busy" @click="startGame">
           <Plus :size="20" />
-          New room
+          Start game
         </button>
 
         <div class="join-divider"><span>or</span></div>
 
-        <label class="field-label" for="invite-code">Room link or code</label>
+        <label class="field-label" for="invite-code">Game link or code</label>
         <div class="join-row">
           <span class="input-icon"><Link2 :size="18" /></span>
           <input
@@ -345,48 +461,21 @@ function gameLabel(game: Game) {
             class="text-input text-input--icon"
             autocomplete="off"
             placeholder="Paste invite"
-            @keyup.enter="joinRoom"
+            @keyup.enter="joinGame"
           />
           <button
             type="button"
             class="icon-button icon-button--confirm"
             :disabled="busy"
-            title="Join room"
-            aria-label="Join room"
-            @click="joinRoom"
+            title="Join game"
+            aria-label="Join game"
+            @click="joinGame"
           >
             <ArrowRight :size="20" />
           </button>
         </div>
 
         <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
-      </section>
-
-      <section v-if="games.length" class="recent-games" aria-labelledby="recent-title">
-        <div class="section-heading-row">
-          <div>
-            <p class="section-kicker">Rooms</p>
-            <h2 id="recent-title">Recent games</h2>
-          </div>
-        </div>
-        <div class="game-list">
-          <RouterLink
-            v-for="game in games"
-            :key="game.id"
-            :to="`/game/${game.invite_code}`"
-            class="game-list-item"
-          >
-            <div class="game-list-item__players">
-              <AvatarImage :seed="game.host.avatar_seed" size="small" />
-              <div>
-                <strong>{{ opponentName(game) }}</strong>
-                <span>Round {{ game.round }} · {{ game.host_score }}–{{ game.guest_score }}</span>
-              </div>
-            </div>
-            <span class="game-list-item__status">{{ gameLabel(game) }}</span>
-            <ArrowRight :size="18" />
-          </RouterLink>
-        </div>
       </section>
 
       <LeaderboardPanel
@@ -408,7 +497,7 @@ function gameLabel(game: Game) {
         <div class="dialog-header">
           <div>
             <p class="section-kicker">Account</p>
-            <h2 id="auth-title">{{ authMode === 'register' ? 'Save your progress' : 'Sign in' }}</h2>
+            <h2 id="auth-title">{{ authMode === 'register' ? 'Create account' : 'Sign in' }}</h2>
           </div>
           <button
             type="button"
@@ -457,7 +546,7 @@ function gameLabel(game: Game) {
           </template>
           <p v-if="authError" class="form-error" role="alert">{{ authError }}</p>
           <button type="submit" class="button button--primary" :disabled="busy">
-            {{ authMode === 'register' ? 'Save progress' : 'Sign in' }}
+            {{ authMode === 'register' ? 'Create account' : 'Sign in' }}
           </button>
         </form>
       </section>

@@ -3,6 +3,7 @@ import { RefreshCw, Trophy, Users } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
 import AvatarImage from '@/components/AvatarImage.vue'
+import { shortPlayerId } from '@/logic/games'
 import type {
   HeadToHeadEntry,
   Leaderboard,
@@ -190,7 +191,10 @@ function resultDate(result: LeaderboardResult) {
           <strong class="standing-rank">{{ selected(entry).games_played ? index + 1 : '—' }}</strong>
           <div class="standing-player">
             <AvatarImage :seed="entry.player.avatar_seed" size="small" />
-            <strong>{{ entry.player.display_name }}</strong>
+            <div class="standing-player__identity">
+              <strong>{{ entry.player.display_name }}</strong>
+              <small>{{ shortPlayerId(entry.player.id) }}</small>
+            </div>
             <span v-if="entry.player.id === playerId">You</span>
           </div>
           <strong class="standing-record">{{ record(selected(entry)) }}</strong>
@@ -202,7 +206,10 @@ function resultDate(result: LeaderboardResult) {
         <div v-for="entry in friendRows" :key="entry.opponent.id" class="matchup-row">
           <div class="standing-player">
             <AvatarImage :seed="entry.opponent.avatar_seed" size="small" />
-            <strong>{{ entry.opponent.display_name }}</strong>
+            <div class="standing-player__identity">
+              <strong>{{ entry.opponent.display_name }}</strong>
+              <small>{{ shortPlayerId(entry.opponent.id) }}</small>
+            </div>
           </div>
           <div class="matchup-record">
             <strong>{{ record(selected(entry)) }}</strong>
@@ -289,6 +296,8 @@ function resultDate(result: LeaderboardResult) {
 }
 
 .leaderboard-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
   width: fit-content;
   margin: 0 1.25rem 1.25rem;
 }
@@ -296,6 +305,7 @@ function resultDate(result: LeaderboardResult) {
 .leaderboard-tabs button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
 }
 
@@ -382,6 +392,18 @@ function resultDate(result: LeaderboardResult) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.standing-player__identity {
+  display: grid;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.standing-player__identity small {
+  color: var(--color-text-muted);
+  font-size: 0.61rem;
+  font-weight: 700;
 }
 
 .standing-player > span {
@@ -498,14 +520,21 @@ function resultDate(result: LeaderboardResult) {
     flex-direction: column;
   }
 
-  .period-control,
-  .leaderboard-tabs {
+  .period-control {
     width: 100%;
   }
 
-  .period-control button,
-  .leaderboard-tabs button {
+  .period-control button {
     flex: 1;
+  }
+
+  .leaderboard-tabs {
+    width: calc(100% - 2.5rem);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .leaderboard-tabs button {
+    min-width: 0;
   }
 
   .personal-summary > div {

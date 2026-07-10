@@ -5,7 +5,7 @@ A private realtime two-player Gobang game with pair captures. Five or more stone
 ## Stack
 
 - Vue 3 and Vite for the responsive lobby and board
-- FastAPI, managed with uv, as the authoritative rules and room service
+- FastAPI, managed with uv, as the authoritative rules and game service
 - PocketBase for player accounts, persistence, and realtime SSE updates
 - Caddy for one same-origin public endpoint
 - Docker Compose for local and Coolify deployment
@@ -19,7 +19,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open `http://localhost:8080`. The first browser creates a room and shares its `/game/<invite-code>` link with the second player.
+Open `http://localhost:8080`. The first browser starts a game and shares its `/game/<invite-code>` link with the second player.
 
 Local port `8080` is published by `compose.override.yaml`, which Docker Compose loads automatically. The production Compose file exposes Caddy only to Docker networks so Coolify can perform rolling deployments without competing for a fixed host port.
 
@@ -92,4 +92,4 @@ Email verification and password reset are not enabled in this version, so losing
 
 PocketBase stores its database and uploaded data under `/pb/pb_data`. Back up the named volume while PocketBase is stopped, or use PocketBase's backup API from a private administrative connection.
 
-The app intentionally runs one FastAPI worker. Room locks are process-local and pair with record revisions to serialize moves. Do not horizontally scale the `app` service without first adding a distributed lock or an atomic database compare-and-swap operation.
+The app intentionally runs one FastAPI worker. Game locks are process-local and pair with record revisions to serialize moves. Do not horizontally scale the `app` service without first adding a distributed lock or an atomic database compare-and-swap operation.
