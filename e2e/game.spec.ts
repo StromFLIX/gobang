@@ -181,6 +181,45 @@ test('an upgraded guest can continue from another device', async ({ browser }) =
   await secondContext.close()
 })
 
+test('guest games can be merged into an existing account', async ({ browser }) => {
+  const accountContext = await browser.newContext({ viewport: { width: 1200, height: 850 } })
+  const accountPage = await accountContext.newPage()
+  const email = `merge-${Date.now()}@example.com`
+  const password = 'BrowserPass42!'
+
+  await configurePlayer(accountPage, 'Existing account', 'glasses2')
+  await accountPage.getByRole('button', { name: 'Save player' }).click()
+  await accountPage.locator('.account-summary').getByRole('button', { name: 'Sign in' }).click()
+  const accountDialog = accountPage.getByRole('dialog')
+  await accountDialog.getByRole('button', { name: 'Create account' }).click()
+  await accountDialog.getByLabel('Email').fill(email)
+  await accountDialog.getByLabel('Password', { exact: true }).fill(password)
+  await accountDialog.getByLabel('Confirm password').fill(password)
+  await accountDialog.locator('form').getByRole('button', { name: 'Create account' }).click()
+  await expect(accountPage.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await accountContext.close()
+
+  const guestContext = await browser.newContext({ viewport: { width: 1200, height: 850 } })
+  const guestPage = await guestContext.newPage()
+  await configurePlayer(guestPage, 'Guest with progress', 'glasses3')
+  await guestPage.getByRole('button', { name: 'Start game' }).click()
+  const gamePath = new URL(guestPage.url()).pathname
+  await guestPage.getByRole('link', { name: 'Back to lobby' }).click()
+
+  await guestPage.locator('.account-summary').getByRole('button', { name: 'Sign in' }).click()
+  const mergeDialog = guestPage.getByRole('dialog')
+  await mergeDialog.getByLabel('Email').fill(email)
+  await mergeDialog.getByLabel('Password').fill(password)
+  await mergeDialog.locator('form').getByRole('button', { name: 'Sign in' }).click()
+
+  await expect(mergeDialog).toHaveAccessibleName('Keep your current games?')
+  await mergeDialog.getByRole('button', { name: 'Merge 1 game and sign in' }).click()
+  await expect(guestPage.locator('.account-summary__name')).toHaveText('Existing account')
+  await expect(guestPage.locator(`a[href="${gamePath}"]`)).toBeVisible()
+
+  await guestContext.close()
+})
+
 test('a finished round appears in personal leaderboard history', async ({ browser }) => {
   const hostContext = await browser.newContext({ viewport: { width: 1200, height: 900 } })
   const guestContext = await browser.newContext({ viewport: { width: 1200, height: 900 } })

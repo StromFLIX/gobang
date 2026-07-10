@@ -48,6 +48,7 @@ class FakePocketBase:
             "host-token": Player("host", "Flo", "flo"),
             "guest-token": Player("guest", "Felix", "felix"),
             "third-token": Player("third", "Third", "third"),
+            "account-token": Player("account", "Account", "account", is_guest=False),
         }
 
     async def verify_player(self, token: str) -> PlayerSession:
@@ -63,7 +64,7 @@ class FakePocketBase:
     async def login(self, identity: str, password: str) -> PlayerSession:
         if identity != "user@example.com" or password != "password123":
             raise PocketBaseError(400, "Invalid credentials")
-        return PlayerSession("host-token", self.players["host-token"])
+        return PlayerSession("account-token", self.players["account-token"])
 
     async def update_profile(
         self, player_id: str, display_name: str, avatar_seed: str
@@ -111,6 +112,28 @@ def test_guest_profile_and_registration_flow() -> None:
         )
         assert register_response.status_code == 200
         assert register_response.json()["player"]["is_guest"] is False
+
+
+def test_guest_progress_can_be_merged_while_signing_in() -> None:
+    with make_client() as client:
+        created = client.post(
+            "/api/games", headers={"Authorization": "Bearer guest-token"}
+        ).json()
+
+        response = client.post(
+            "/api/auth/merge-login",
+            headers={"Authorization": "Bearer guest-token"},
+            json={"email": "user@example.com", "password": "password123"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["player"]["id"] == "account"
+        assert response.json()["transferred_games"] == 1
+        games = client.get(
+            "/api/games", headers={"Authorization": "Bearer account-token"}
+        ).json()
+        assert games[0]["id"] == created["id"]
+        assert games[0]["host"]["id"] == "account"
 
 
 def test_private_room_turn_and_revision_protection() -> None:

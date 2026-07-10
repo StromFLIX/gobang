@@ -84,7 +84,9 @@ The first response should be `{"status":"ok"}` and the second should be PocketBa
 
 ## Accounts and recovery
 
-Anonymous players are backed by a PocketBase identity whose random recovery credentials are stored only in browser local storage. Clearing browser data loses that guest identity. Registering with email and password upgrades the same identity, preserving its games and allowing login on another device.
+Anonymous players are backed by a PocketBase identity whose random recovery credentials are stored only in browser local storage. Clearing browser data loses that guest identity. Creating an account upgrades the same identity, so its games remain attached automatically and become available on other devices.
+
+Signing in to an existing account is a different identity change. When the current guest has games, the sign-in dialog asks whether to transfer those games, scores, and round history to the account or leave them behind on the guest profile. A game played directly between that guest and the destination account cannot be collapsed into a self-game, so it remains unchanged and is reported after the merge.
 
 Email verification and password reset are not enabled in this version, so losing an account password requires manual administration.
 

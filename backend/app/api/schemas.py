@@ -13,6 +13,7 @@ from app.services.games import (
     LeaderboardResult,
     Performance,
     PeriodPerformance,
+    PlayerMerge,
 )
 
 DisplayName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=24)]
@@ -62,6 +63,22 @@ class GuestAuthResponse(AuthResponse):
             token=session.token,
             player=PlayerResponse.from_domain(session.player),
             recovery=GuestRecovery(identity=session.identity, password=session.password),
+        )
+
+
+class MergedAuthResponse(AuthResponse):
+    transferred_games: int
+    skipped_games: int
+
+    @classmethod
+    def from_merge(
+        cls, session: PlayerSession, merge: PlayerMerge
+    ) -> "MergedAuthResponse":
+        return cls(
+            token=session.token,
+            player=PlayerResponse.from_domain(session.player),
+            transferred_games=merge.transferred_games,
+            skipped_games=merge.skipped_games,
         )
 
 

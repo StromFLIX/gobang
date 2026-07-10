@@ -204,8 +204,19 @@
 
 .profile-tool--editor,
 .game-tool,
-.account-nudge {
+.account-nudge,
+.merge-notice {
   grid-column: 1 / -1;
+}
+
+.merge-notice {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid var(--color-green);
+  color: var(--color-green-dark);
+  background: var(--color-surface-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
 .section-heading-row,
@@ -532,6 +543,33 @@
 
 .auth-form .button {
   margin-top: 1.25rem;
+}
+
+.account-progress-note,
+.merge-choice p {
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.account-progress-note {
+  margin-top: 1rem;
+}
+
+.merge-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.merge-choice__warning {
+  padding: 0.7rem 0.8rem;
+  border-left: 3px solid var(--color-yellow);
+  background: var(--color-surface-muted);
+}
+
+.merge-choice .button--primary {
+  margin-top: 0.35rem;
 }
 
 .profile-gate .profile-tool {

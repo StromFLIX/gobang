@@ -204,6 +204,44 @@ async def test_cannot_rematch_active_game(service: GameService) -> None:
 
 
 @pytest.mark.asyncio
+async def test_merge_player_transfers_game_and_result_history(
+    service: GameService,
+) -> None:
+    game = await active_game(service)
+    first_move = await service.move(game.id, HOST.id, 0, game.revision)
+    second_move = await service.move(first_move.id, GUEST.id, 1, first_move.revision)
+    resigned = await service.resign(second_move.id, HOST.id)
+
+    result = await service.merge_player(GUEST.id, THIRD)
+    merged = await service.get(resigned.id, THIRD.id)
+
+    assert result.transferred_games == 1
+    assert result.skipped_games == 0
+    assert merged.guest == THIRD
+    assert merged.white_player_id == THIRD.id
+    assert merged.moves[-1].player_id == THIRD.id
+    assert merged.winner_player_id == THIRD.id
+    assert merged.round_results[-1].winner_player_id == THIRD.id
+    with pytest.raises(GameNotFound):
+        await service.get(resigned.id, GUEST.id)
+
+
+@pytest.mark.asyncio
+async def test_merge_player_skips_games_against_destination(
+    service: GameService,
+) -> None:
+    waiting = await service.create(THIRD)
+    original = await service.join(waiting.invite_code, GUEST)
+
+    result = await service.merge_player(GUEST.id, THIRD)
+    unchanged = await service.get(original.id, THIRD.id)
+
+    assert result.transferred_games == 0
+    assert result.skipped_games == 1
+    assert unchanged.guest == GUEST
+
+
+@pytest.mark.asyncio
 async def test_leaderboard_combines_recent_and_legacy_results(
     service: GameService, repository: MemoryRepository
 ) -> None:

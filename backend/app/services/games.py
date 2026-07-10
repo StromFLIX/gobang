@@ -1,6 +1,7 @@
 import asyncio
 import secrets
 from collections.abc import Callable, Sequence
+from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
@@ -74,6 +75,12 @@ class Leaderboard:
     overall: tuple[LeaderboardEntry, ...]
     opponents: tuple[HeadToHeadEntry, ...]
     results: tuple[LeaderboardResult, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerMerge:
+    transferred_games: int
+    skipped_games: int
 
 
 class GameRepository(Protocol):
@@ -261,6 +268,67 @@ class GameService:
             opponents=tuple(opponent_entries),
             results=tuple(results[:50]),
         )
+
+    async def merge_player(self, source_player_id: str, target: Player) -> PlayerMerge:
+        listed_games = await self._repository.list_for_player(source_player_id)
+        async with AsyncExitStack() as stack:
+            for game_id in sorted(game.id for game in listed_games):
+                await stack.enter_async_context(self._lock(game_id))
+
+            games = [
+                game
+                for listed in listed_games
+                if (game := await self._repository.get_by_id(listed.id)) is not None
+                and source_player_id in game.player_ids()
+            ]
+            transferable = [game for game in games if target.id not in game.player_ids()]
+
+            for game in transferable:
+                previous_revision = game.revision
+                if game.host.id == source_player_id:
+                    game.host = target
+                if game.guest and game.guest.id == source_player_id:
+                    game.guest = target
+                game.black_player_id = self._replace_player_id(
+                    game.black_player_id, source_player_id, target.id
+                )
+                game.white_player_id = self._replace_player_id(
+                    game.white_player_id, source_player_id, target.id
+                )
+                game.winner_player_id = self._replace_player_id(
+                    game.winner_player_id, source_player_id, target.id
+                )
+                game.resigned_by_id = self._replace_player_id(
+                    game.resigned_by_id, source_player_id, target.id
+                )
+                game.moves = [
+                    Move(
+                        player_id=(
+                            target.id if move.player_id == source_player_id else move.player_id
+                        ),
+                        position=move.position,
+                        stone=move.stone,
+                        captured=move.captured,
+                    )
+                    for move in game.moves
+                ]
+                game.round_results = [
+                    RoundResult(
+                        round=result.round,
+                        completed_at=result.completed_at,
+                        status=result.status,
+                        winner_player_id=self._replace_player_id(
+                            result.winner_player_id, source_player_id, target.id
+                        ),
+                    )
+                    for result in game.round_results
+                ]
+                game.revision += 1
+                await self._repository.update(game, previous_revision)
+            return PlayerMerge(
+                transferred_games=len(transferable),
+                skipped_games=len(games) - len(transferable),
+            )
 
     async def move(
         self,
@@ -494,3 +562,9 @@ class GameService:
         if game.guest and winner_player_id == game.guest.id:
             return game.guest
         return None
+
+    @staticmethod
+    def _replace_player_id(
+        player_id: str | None, source_player_id: str, target_player_id: str
+    ) -> str | None:
+        return target_player_id if player_id == source_player_id else player_id

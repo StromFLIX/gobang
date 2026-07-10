@@ -53,10 +53,12 @@ const busy = ref(false)
 const pageError = ref('')
 const authOpen = ref(false)
 const authMode = ref<'login' | 'register'>('register')
+const mergePrompt = ref(false)
 const email = ref('')
 const password = ref('')
 const passwordConfirm = ref('')
 const authError = ref('')
+const mergeNotice = ref('')
 const profileEditing = ref(true)
 const profileSaving = ref(false)
 const showAllOpponents = ref(false)
@@ -71,6 +73,13 @@ const visibleOpponentGroups = computed(() =>
 const waitingGames = computed(() =>
   games.value.filter((game) => game.status === 'waiting' && !game.guest),
 )
+const guestGameLabel = computed(() =>
+  games.value.length === 1 ? '1 game' : `${games.value.length} games`,
+)
+const authTitle = computed(() => {
+  if (mergePrompt.value) return 'Keep your current games?'
+  return authMode.value === 'register' ? 'Create account' : 'Sign in'
+})
 
 watch(
   player,
@@ -212,10 +221,17 @@ async function joinGame() {
 
 function openAuth(mode: 'login' | 'register') {
   authMode.value = mode
+  mergePrompt.value = false
   authError.value = ''
   password.value = ''
   passwordConfirm.value = ''
   authOpen.value = true
+}
+
+function setAuthMode(mode: 'login' | 'register') {
+  authMode.value = mode
+  mergePrompt.value = false
+  authError.value = ''
 }
 
 async function submitAuth() {
@@ -224,15 +240,31 @@ async function submitAuth() {
     authError.value = 'Passwords do not match.'
     return
   }
+  if (authMode.value === 'login' && player.value?.is_guest && games.value.length > 0) {
+    mergePrompt.value = true
+    return
+  }
+  await finishAuth(false)
+}
+
+async function finishAuth(mergeGuestProgress: boolean) {
+  authError.value = ''
   busy.value = true
   try {
+    let mergeResult = null
     if (authMode.value === 'register') {
       await register(email.value, password.value)
     } else {
-      await login(email.value, password.value)
+      mergeResult = await login(email.value, password.value, mergeGuestProgress)
     }
     authOpen.value = false
     profileEditing.value = false
+    if (mergeResult) {
+      const moved = `${mergeResult.transferredGames} ${mergeResult.transferredGames === 1 ? 'game' : 'games'} moved to your account.`
+      mergeNotice.value = mergeResult.skippedGames
+        ? `${moved} ${mergeResult.skippedGames} ${mergeResult.skippedGames === 1 ? 'game was' : 'games were'} already against this account and stayed unchanged.`
+        : moved
+    }
     await Promise.all([loadGames(), loadLeaderboard()])
   } catch (error) {
     authError.value = error instanceof ApiError ? error.message : 'Could not sign in.'
@@ -313,6 +345,8 @@ function groupSummary(group: OpponentGameGroup) {
         <p class="section-kicker">Gobang</p>
         <h1>Your games.</h1>
       </section>
+
+      <p v-if="mergeNotice" class="merge-notice" role="status">{{ mergeNotice }}</p>
 
       <section v-if="profileEditing" class="profile-tool profile-tool--editor" aria-labelledby="profile-title">
         <div class="section-heading-row">
@@ -497,7 +531,7 @@ function groupSummary(group: OpponentGameGroup) {
         <div class="dialog-header">
           <div>
             <p class="section-kicker">Account</p>
-            <h2 id="auth-title">{{ authMode === 'register' ? 'Create account' : 'Sign in' }}</h2>
+            <h2 id="auth-title">{{ authTitle }}</h2>
           </div>
           <button
             type="button"
@@ -510,16 +544,16 @@ function groupSummary(group: OpponentGameGroup) {
           </button>
         </div>
 
-        <div class="segmented-control" aria-label="Account action">
-          <button type="button" :class="{ active: authMode === 'register' }" @click="authMode = 'register'">
+        <div v-if="!mergePrompt" class="segmented-control" aria-label="Account action">
+          <button type="button" :class="{ active: authMode === 'register' }" @click="setAuthMode('register')">
             Create account
           </button>
-          <button type="button" :class="{ active: authMode === 'login' }" @click="authMode = 'login'">
+          <button type="button" :class="{ active: authMode === 'login' }" @click="setAuthMode('login')">
             Sign in
           </button>
         </div>
 
-        <form class="auth-form" @submit.prevent="submitAuth">
+        <form v-if="!mergePrompt" class="auth-form" @submit.prevent="submitAuth">
           <label class="field-label" for="account-email">Email</label>
           <input id="account-email" v-model="email" class="text-input" type="email" required autocomplete="email" />
           <label class="field-label" for="account-password">Password</label>
@@ -544,11 +578,43 @@ function groupSummary(group: OpponentGameGroup) {
               autocomplete="new-password"
             />
           </template>
+          <p v-if="authMode === 'register' && games.length" class="account-progress-note">
+            Your current {{ guestGameLabel }} will stay with this account.
+          </p>
           <p v-if="authError" class="form-error" role="alert">{{ authError }}</p>
           <button type="submit" class="button button--primary" :disabled="busy">
             {{ authMode === 'register' ? 'Create account' : 'Sign in' }}
           </button>
         </form>
+        <div v-else class="merge-choice">
+          <p>
+            This guest profile has {{ guestGameLabel }}. You can move them into the account
+            you are signing in to, including scores and round history.
+          </p>
+          <p class="merge-choice__warning">
+            Signing in without merging leaves this progress behind on the guest profile.
+          </p>
+          <p v-if="authError" class="form-error" role="alert">{{ authError }}</p>
+          <button
+            type="button"
+            class="button button--primary"
+            :disabled="busy"
+            @click="finishAuth(true)"
+          >
+            Merge {{ guestGameLabel }} and sign in
+          </button>
+          <button
+            type="button"
+            class="button button--secondary"
+            :disabled="busy"
+            @click="finishAuth(false)"
+          >
+            Sign in without merging
+          </button>
+          <button type="button" class="button button--quiet" :disabled="busy" @click="mergePrompt = false">
+            Back
+          </button>
+        </div>
       </section>
     </div>
   </div>

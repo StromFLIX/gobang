@@ -44,16 +44,23 @@ class PocketBaseGameRepository:
         return game_from_record(items[0]) if items else None
 
     async def list_for_player(self, player_id: str) -> Sequence[Game]:
-        response = await self._client.admin_request(
-            "GET",
-            "/api/collections/games/records",
-            params={
-                "filter": f'host = "{player_id}" || guest = "{player_id}"',
-                "sort": "-updated",
-                "perPage": 50,
-            },
-        )
-        return [game_from_record(item) for item in response["items"]]
+        games: list[Game] = []
+        page = 1
+        while True:
+            response = await self._client.admin_request(
+                "GET",
+                "/api/collections/games/records",
+                params={
+                    "filter": f'host = "{player_id}" || guest = "{player_id}"',
+                    "sort": "-updated",
+                    "page": page,
+                    "perPage": 200,
+                },
+            )
+            games.extend(game_from_record(item) for item in response["items"])
+            if page >= int(response["totalPages"]):
+                return games
+            page += 1
 
     async def list_all(self) -> Sequence[Game]:
         games: list[Game] = []

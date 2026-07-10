@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.dependencies import CurrentPlayer, PocketBaseDependency
+from app.api.dependencies import CurrentPlayer, GameServiceDependency, PocketBaseDependency
 from app.api.schemas import (
     AuthResponse,
     GuestAuthResponse,
     LoginRequest,
+    MergedAuthResponse,
     PlayerResponse,
     ProfileRequest,
     RegisterRequest,
@@ -21,6 +22,22 @@ async def create_guest(pocketbase: PocketBaseDependency) -> GuestAuthResponse:
 @router.post("/login", response_model=AuthResponse)
 async def login(body: LoginRequest, pocketbase: PocketBaseDependency) -> AuthResponse:
     return AuthResponse.from_session(await pocketbase.login(str(body.email), body.password))
+
+
+@router.post("/merge-login", response_model=MergedAuthResponse)
+async def merge_login(
+    body: LoginRequest,
+    player: CurrentPlayer,
+    pocketbase: PocketBaseDependency,
+    games: GameServiceDependency,
+) -> MergedAuthResponse:
+    if not player.is_guest:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only guest progress can be merged")
+    session = await pocketbase.login(str(body.email), body.password)
+    if session.player.is_guest:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Sign in to a registered account")
+    merge = await games.merge_player(player.id, session.player)
+    return MergedAuthResponse.from_merge(session, merge)
 
 
 @router.get("/me", response_model=PlayerResponse)

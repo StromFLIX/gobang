@@ -1,9 +1,15 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 
+import pytest
+
 from app.domain.game import Game, GameStatus, Move, Player, RoundResult
 from app.domain.rules import Stone, empty_board
-from app.repositories.pocketbase_games import game_from_record, game_to_record
+from app.repositories.pocketbase_games import (
+    PocketBaseGameRepository,
+    game_from_record,
+    game_to_record,
+)
 
 
 def test_game_record_round_trip() -> None:
@@ -55,3 +61,23 @@ def test_waiting_game_record_round_trip() -> None:
     restored = game_from_record({"id": game.id, **payload})
 
     assert restored == replace(game)
+
+
+@pytest.mark.asyncio
+async def test_list_for_player_reads_every_page() -> None:
+    class FakeClient:
+        def __init__(self) -> None:
+            self.pages: list[int] = []
+
+        async def admin_request(self, _method: str, _path: str, **kwargs: object) -> object:
+            params = kwargs["params"]
+            assert isinstance(params, dict)
+            page = int(params["page"])
+            self.pages.append(page)
+            return {"items": [], "totalPages": 2}
+
+    client = FakeClient()
+    repository = PocketBaseGameRepository(client)  # type: ignore[arg-type]
+
+    assert await repository.list_for_player("player-id") == []
+    assert client.pages == [1, 2]

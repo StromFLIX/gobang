@@ -89,6 +89,11 @@ export interface AuthSession {
   player: Player
 }
 
+export interface MergedAuthSession extends AuthSession {
+  transferred_games: number
+  skipped_games: number
+}
+
 export interface GuestRecovery {
   identity: string
   password: string

@@ -117,9 +117,18 @@ async function register(email: string, password: string) {
   applySession(session, null, true)
 }
 
-async function login(email: string, password: string) {
+async function login(email: string, password: string, mergeGuestProgress = false) {
+  if (mergeGuestProgress) {
+    const session = await api.mergeLogin(email, password)
+    applySession(session, null, true)
+    return {
+      transferredGames: session.transferred_games,
+      skippedGames: session.skipped_games,
+    }
+  }
   const session = await api.login(email, password)
   applySession(session, null, true)
+  return null
 }
 
 async function logout() {
