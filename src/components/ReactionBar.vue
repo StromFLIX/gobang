@@ -69,14 +69,13 @@ function assetFor(kind: ReactionKind) {
 <style scoped>
 .reaction-bar {
   position: relative;
-  display: flex;
-  width: fit-content;
-  max-width: 100%;
+  display: grid;
+  width: 100%;
   min-height: 2.8rem;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.3rem;
   align-items: center;
-  justify-content: center;
-  margin: 0.55rem auto 0;
+  margin-top: 0.55rem;
   padding: 0.25rem;
   overflow: visible;
   border: 1px solid var(--color-border);
@@ -87,9 +86,9 @@ function assetFor(kind: ReactionKind) {
 
 .reaction-button {
   display: grid;
-  width: 2.35rem;
+  width: 100%;
+  min-width: 0;
   height: 2.25rem;
-  flex: 0 0 2.35rem;
   place-items: center;
   padding: 0;
   border: 0;
@@ -195,6 +194,24 @@ function assetFor(kind: ReactionKind) {
 @media (prefers-reduced-motion: reduce) {
   .reaction-popup {
     animation-name: reaction-fade;
+  }
+}
+
+@media (max-width: 430px) {
+  .reaction-bar {
+    min-height: 2.5rem;
+    gap: 0.1rem;
+    margin-top: 0.35rem;
+    padding: 0.15rem;
+  }
+
+  .reaction-button {
+    height: 2.1rem;
+  }
+
+  .reaction-button img {
+    width: 1.2rem;
+    height: 1.2rem;
   }
 }
 

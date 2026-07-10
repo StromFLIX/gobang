@@ -87,6 +87,12 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   await expect(host.getByText('Guest player', { exact: true })).toBeVisible()
   await expect(guest.getByText('Host player', { exact: true })).toBeVisible()
 
+  const desktopBoardBox = await host.getByRole('grid', { name: 'Gobang board' }).boundingBox()
+  const desktopReactionBox = await host.locator('.reaction-bar').boundingBox()
+  expect(desktopBoardBox).not.toBeNull()
+  expect(desktopReactionBox).not.toBeNull()
+  expect(Math.abs(desktopReactionBox!.width - desktopBoardBox!.width)).toBeLessThanOrEqual(1)
+
   await host.getByRole('button', { name: 'Send Shit' }).click()
   await expect(guest.locator('.reaction-popup img[data-reaction="poop"]')).toBeVisible()
   await expect(guest.locator('.reaction-popup')).toContainText('Host player')
@@ -165,10 +171,13 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   await expect(board).toBeVisible()
   await expect(page.getByRole('button', { name: 'Confirm selected move' })).toBeVisible()
   const box = await board.boundingBox()
+  const reactionBox = await page.locator('.reaction-bar').boundingBox()
   expect(box).not.toBeNull()
+  expect(reactionBox).not.toBeNull()
   expect(box!.x).toBeGreaterThanOrEqual(0)
   expect(box!.x + box!.width).toBeLessThanOrEqual(390)
   expect(box!.width).toBeGreaterThan(350)
+  expect(Math.abs(reactionBox!.width - box!.width)).toBeLessThanOrEqual(1)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: 'test-results/mobile-room.png' })
 
