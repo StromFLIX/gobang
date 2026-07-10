@@ -1,0 +1,310 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - link "Gobang home" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - strong [ref=e6]: Gobang
+    - generic [ref=e12]:
+      - button "Edit player" [ref=e13] [cursor=pointer]
+      - generic [ref=e15]:
+        - strong [ref=e16]: Player
+        - generic [ref=e17]: "#R3XH8S"
+      - button "Sign in" [ref=e18] [cursor=pointer]
+  - main [ref=e22]:
+    - region [ref=e23]:
+      - figure "Replay of a Gobang match" [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26]:
+            - strong [ref=e28]: Mina
+            - text: Black
+          - generic [ref=e29]:
+            - text: White
+            - strong [ref=e30]: Felix
+        - img "Move 1 of 9" [ref=e659]
+        - generic [ref=e259]:
+          - generic [ref=e260]: Match replay
+          - strong [ref=e262]: Move 1 of 9
+      - generic [ref=e263]:
+        - paragraph [ref=e264]: Play Gobang
+        - heading "Choose your match." [level=1] [ref=e265]
+        - paragraph [ref=e266]: Five in a row, pair captures, and a live opponent on the other side.
+        - region [ref=e267]:
+          - generic [ref=e279]:
+            - heading "Play someone new" [level=2] [ref=e280]
+            - paragraph [ref=e281]: Sign in or create an account for ranked matchmaking.
+          - generic "Approximate live population" [ref=e282]:
+            - generic [ref=e283]:
+              - strong [ref=e290]: "1"
+              - text: online
+            - generic [ref=e291]:
+              - strong [ref=e297]: "0"
+              - text: playing
+            - generic [ref=e298]:
+              - strong [ref=e301]: "0"
+              - text: matches
+          - generic [ref=e302]:
+            - button "Create account" [ref=e303] [cursor=pointer]
+            - button "Sign in" [ref=e307] [cursor=pointer]
+        - region [ref=e311]:
+          - generic [ref=e319]:
+            - heading "Play with friends" [level=2] [ref=e320]
+            - paragraph [ref=e321]: Open a private game and share its link, or join with a code.
+          - button "Start game" [active] [ref=e322] [cursor=pointer]
+          - generic [ref=e324]:
+            - textbox "Game link or code" [ref=e329]:
+              - /placeholder: Paste game link or code
+            - button "Join game" [ref=e330] [cursor=pointer]
+        - alert [ref=e644]: Choose a player name first.
+    - region [ref=e333]:
+      - generic [ref=e334]:
+        - generic [ref=e335]:
+          - paragraph [ref=e336]: Player
+          - heading "Name and avatar" [level=2] [ref=e337]
+        - generic [ref=e338]: This device
+      - generic [ref=e339]: Name
+      - textbox "Name" [ref=e340]:
+        - /placeholder: Your name
+      - generic [ref=e341]: Avatar
+      - generic [ref=e342]:
+        - button "Randomize" [ref=e345] [cursor=pointer]
+        - generic [ref=e352]:
+          - generic [ref=e353]:
+            - generic [ref=e354]: Hair
+            - combobox "Hair" [ref=e355]:
+              - option "Afro"
+              - option "Bangs" [selected]
+              - option "Bantu knots"
+              - option "Bun"
+              - option "Cornrows"
+              - option "Dreads"
+              - option "Flat top"
+              - option "Long curls"
+              - option "Medium"
+              - option "Mohawk"
+              - option "Short"
+              - option "Twists"
+          - generic [ref=e356]:
+            - generic [ref=e357]: Expression
+            - combobox "Expression" [ref=e358]:
+              - option "Calm"
+              - option "Cheeky"
+              - option "Cute" [selected]
+              - option "Focused"
+              - option "Grinning"
+              - option "Serious"
+              - option "Smile"
+              - option "Big smile"
+          - generic [ref=e359]:
+            - generic [ref=e360]: Glasses
+            - combobox "Glasses" [ref=e361]:
+              - option "None" [selected]
+              - option "Eyepatch"
+              - option "Round glasses"
+              - option "Wire glasses"
+              - option "Square glasses"
+              - option "Small glasses"
+              - option "Sunglasses"
+          - generic [ref=e362]:
+            - generic [ref=e363]: Facial hair
+            - combobox "Facial hair" [ref=e364]:
+              - option "None"
+              - option "Chin beard"
+              - option "Full beard"
+              - option "Goatee" [selected]
+              - option "Moustache"
+              - option "Curled moustache"
+          - group "Skin" [ref=e365]:
+            - generic [ref=e367]:
+              - button "Light skin" [ref=e368] [cursor=pointer]
+              - button "Warm light skin" [ref=e369] [cursor=pointer]
+              - button "Medium skin" [pressed] [ref=e370] [cursor=pointer]
+              - button "Deep skin" [ref=e373] [cursor=pointer]
+              - button "Dark skin" [ref=e374] [cursor=pointer]
+          - group "Shirt" [ref=e375]:
+            - generic [ref=e377]:
+              - button "Coral shirt" [ref=e378] [cursor=pointer]
+              - button "Amber shirt" [ref=e379] [cursor=pointer]
+              - button "Green shirt" [ref=e380] [cursor=pointer]
+              - button "Aqua shirt" [ref=e381] [cursor=pointer]
+              - button "Blue shirt" [pressed] [ref=e382] [cursor=pointer]
+              - button "Pink shirt" [ref=e385] [cursor=pointer]
+      - alert [ref=e645]: Choose a player name first.
+      - button "Save player" [ref=e387] [cursor=pointer]
+    - region [ref=e388]:
+      - generic [ref=e390]:
+        - paragraph [ref=e391]: Playing
+        - heading "Current opponents" [level=2] [ref=e392]
+      - paragraph [ref=e393]: No opponents yet. Start a game below.
+    - region [ref=e394]:
+      - generic [ref=e395]:
+        - generic [ref=e396]:
+          - paragraph [ref=e397]: Records
+          - heading "Leaderboard" [level=2] [ref=e398]
+        - generic "Leaderboard period" [ref=e399]:
+          - button "Last 7 days" [ref=e400] [cursor=pointer]
+          - button "All time" [ref=e401] [cursor=pointer]
+      - tablist "Leaderboard view" [ref=e402]:
+        - tab "Overall" [selected] [ref=e403] [cursor=pointer]
+        - tab "Against friends" [ref=e410] [cursor=pointer]
+      - generic [ref=e416]:
+        - generic [ref=e417]:
+          - generic [ref=e418]: Your record
+          - strong [ref=e419]: 0–0–0
+          - generic [ref=e420]: W–L–D
+        - generic [ref=e421]:
+          - generic [ref=e422]: Win rate
+          - strong [ref=e423]: 0%
+          - generic [ref=e424]: 0 rounds
+        - generic [ref=e425]:
+          - generic [ref=e426]: Elo rating
+          - strong [ref=e427]: "1200"
+          - generic [ref=e428]: Current
+        - generic [ref=e429]:
+          - generic [ref=e430]: Overall rank
+          - strong [ref=e431]: —
+          - generic [ref=e432]: Elo standings
+      - table "Overall standings" [ref=e433]:
+        - generic [ref=e434]:
+          - generic "Leaderboard range" [ref=e435]:
+            - button "Around you" [ref=e436] [cursor=pointer]
+            - button "Top 10" [ref=e437] [cursor=pointer]
+            - button "All players" [ref=e438] [cursor=pointer]
+          - searchbox "Find a player" [ref=e440]
+        - paragraph [ref=e441]: Create an account to challenge ranked players.
+        - row "Rank Player Elo W–L–D Win rate Challenge" [ref=e442]:
+          - generic [ref=e443]: Rank
+          - generic [ref=e444]: Player
+          - generic [ref=e445]: Elo
+          - generic [ref=e446]: W–L–D
+          - generic [ref=e447]: Win rate
+          - generic [ref=e448]: Challenge
+        - 'row "— Mobile player #UDD92W 1200 0–0–0 0%" [ref=e449]':
+          - strong [ref=e450]: —
+          - generic [ref=e453]:
+            - strong [ref=e454]: Mobile player
+            - generic [ref=e455]: "#UDD92W"
+          - strong [ref=e456]: "1200"
+          - strong [ref=e457]: 0–0–0
+          - generic [ref=e458]: 0%
+        - 'row "— Mobile player #9RC3MR 1200 0–0–0 0%" [ref=e459]':
+          - strong [ref=e460]: —
+          - generic [ref=e463]:
+            - strong [ref=e464]: Mobile player
+            - generic [ref=e465]: "#9RC3MR"
+          - strong [ref=e466]: "1200"
+          - strong [ref=e467]: 0–0–0
+          - generic [ref=e468]: 0%
+        - 'row "— Mobile player #CDO4AK 1200 0–0–0 0%" [ref=e469]':
+          - strong [ref=e470]: —
+          - generic [ref=e473]:
+            - strong [ref=e474]: Mobile player
+            - generic [ref=e475]: "#CDO4AK"
+          - strong [ref=e476]: "1200"
+          - strong [ref=e477]: 0–0–0
+          - generic [ref=e478]: 0%
+        - 'row "— Mobile player #ZE49T2 1200 0–0–0 0%" [ref=e479]':
+          - strong [ref=e480]: —
+          - generic [ref=e483]:
+            - strong [ref=e484]: Mobile player
+            - generic [ref=e485]: "#ZE49T2"
+          - strong [ref=e486]: "1200"
+          - strong [ref=e487]: 0–0–0
+          - generic [ref=e488]: 0%
+        - 'row "— Player #83Q239 1200 0–0–0 0%" [ref=e489]':
+          - strong [ref=e490]: —
+          - generic [ref=e493]:
+            - strong [ref=e494]: Player
+            - generic [ref=e495]: "#83Q239"
+          - strong [ref=e496]: "1200"
+          - strong [ref=e497]: 0–0–0
+          - generic [ref=e498]: 0%
+        - 'row "— Player #R3XH8S You 1200 0–0–0 0%" [ref=e499]':
+          - strong [ref=e500]: —
+          - generic [ref=e501]:
+            - generic [ref=e503]:
+              - strong [ref=e504]: Player
+              - generic [ref=e505]: "#R3XH8S"
+            - generic [ref=e506]: You
+          - strong [ref=e507]: "1200"
+          - strong [ref=e508]: 0–0–0
+          - generic [ref=e509]: 0%
+        - 'row "— Ranked one 1783703533403 #ONMSKS 1200 0–0–0 0%" [ref=e510]':
+          - strong [ref=e511]: —
+          - generic [ref=e514]:
+            - strong [ref=e515]: Ranked one 1783703533403
+            - generic [ref=e516]: "#ONMSKS"
+          - strong [ref=e517]: "1200"
+          - strong [ref=e518]: 0–0–0
+          - generic [ref=e519]: 0%
+        - 'row "— Ranked one 1783703690902 #6LR5DB 1200 0–0–0 0%" [ref=e520]':
+          - strong [ref=e521]: —
+          - generic [ref=e524]:
+            - strong [ref=e525]: Ranked one 1783703690902
+            - generic [ref=e526]: "#6LR5DB"
+          - strong [ref=e527]: "1200"
+          - strong [ref=e528]: 0–0–0
+          - generic [ref=e529]: 0%
+        - 'row "— Ranked one 1783704353372 #YAMLYU 1200 0–0–0 0%" [ref=e530]':
+          - strong [ref=e531]: —
+          - generic [ref=e534]:
+            - strong [ref=e535]: Ranked one 1783704353372
+            - generic [ref=e536]: "#YAMLYU"
+          - strong [ref=e537]: "1200"
+          - strong [ref=e538]: 0–0–0
+          - generic [ref=e539]: 0%
+        - 'row "— Ranked one 1783704982548 #W310VK 1200 0–0–0 0%" [ref=e540]':
+          - strong [ref=e541]: —
+          - generic [ref=e544]:
+            - strong [ref=e545]: Ranked one 1783704982548
+            - generic [ref=e546]: "#W310VK"
+          - strong [ref=e547]: "1200"
+          - strong [ref=e548]: 0–0–0
+          - generic [ref=e549]: 0%
+        - 'row "— Ranked one 1783705075317 #HLNI5G 1200 0–0–0 0%" [ref=e550]':
+          - strong [ref=e551]: —
+          - generic [ref=e554]:
+            - strong [ref=e555]: Ranked one 1783705075317
+            - generic [ref=e556]: "#HLNI5G"
+          - strong [ref=e557]: "1200"
+          - strong [ref=e558]: 0–0–0
+          - generic [ref=e559]: 0%
+      - generic [ref=e560]:
+        - generic [ref=e561]:
+          - strong [ref=e562]: Result history
+          - generic [ref=e563]: Everyone
+        - generic [ref=e564]:
+          - generic [ref=e565]:
+            - strong [ref=e569]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e570]: Jul 10 · Round 1
+          - generic [ref=e571]:
+            - strong [ref=e575]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e576]: Jul 10 · Round 1
+          - generic [ref=e577]:
+            - strong [ref=e581]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e582]: Jul 10 · Round 1
+          - generic [ref=e583]:
+            - strong [ref=e587]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e588]: Jul 10 · Round 1
+          - generic [ref=e589]:
+            - strong [ref=e593]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e594]: Jul 10 · Round 1
+          - generic [ref=e595]:
+            - strong [ref=e599]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e600]: Jul 10 · Round 1
+          - generic [ref=e601]:
+            - strong [ref=e605]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e606]: Jul 10 · Round 1
+          - generic [ref=e607]:
+            - strong [ref=e611]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e612]: Jul 10 · Round 1
+          - generic [ref=e613]:
+            - strong [ref=e617]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e618]: Jul 10 · Round 1
+          - generic [ref=e619]:
+            - strong [ref=e623]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e624]: Jul 10 · Round 1
+          - generic [ref=e625]:
+            - strong [ref=e629]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e630]: Jul 10 · Round 1
+          - generic [ref=e631]:
+            - strong [ref=e635]: Leaderboard friend beat Leaderboard host
+            - generic [ref=e636]: Jul 10 · Round 1

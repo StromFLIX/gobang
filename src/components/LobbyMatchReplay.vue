@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Crown } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import AvatarImage from '@/components/AvatarImage.vue'
@@ -7,12 +8,18 @@ import type { Stone } from '@/types/game'
 interface ReplayMove {
   position: number
   stone: Stone
+  captured?: number[]
 }
 
 const BOARD_SIZE = 15
 const cells = Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, position) => position)
+const capturePair = [10 * BOARD_SIZE + 5, 10 * BOARD_SIZE + 6]
 const moves: ReplayMove[] = [
+  { position: 10 * BOARD_SIZE + 4, stone: 'black' },
+  { position: capturePair[0], stone: 'white' },
   { position: 7 * BOARD_SIZE + 4, stone: 'black' },
+  { position: capturePair[1], stone: 'white' },
+  { position: 10 * BOARD_SIZE + 7, stone: 'black', captured: capturePair },
   { position: 6 * BOARD_SIZE + 4, stone: 'white' },
   { position: 7 * BOARD_SIZE + 5, stone: 'black' },
   { position: 6 * BOARD_SIZE + 5, stone: 'white' },
@@ -27,15 +34,24 @@ const visibleMoves = ref(1)
 let replayTimer: ReturnType<typeof setInterval> | null = null
 let completedTicks = 0
 
-const stones = computed(
-  () => new Map(moves.slice(0, visibleMoves.value).map((move) => [move.position, move.stone])),
-)
+const stones = computed(() => {
+  const board = new Map<number, Stone>()
+  for (const move of moves.slice(0, visibleMoves.value)) {
+    board.set(move.position, move.stone)
+    for (const captured of move.captured ?? []) board.delete(captured)
+  }
+  return board
+})
 const lastPosition = computed(() => moves[Math.min(visibleMoves.value, moves.length) - 1].position)
-const replayStatus = computed(() =>
-  visibleMoves.value === moves.length
-    ? 'Black connects five'
-    : `Move ${visibleMoves.value} of ${moves.length}`,
+const currentCapture = computed(
+  () => moves[Math.min(visibleMoves.value, moves.length) - 1].captured ?? [],
 )
+const complete = computed(() => visibleMoves.value === moves.length)
+const replayStatus = computed(() => {
+  if (complete.value) return 'Mina wins — five in a row'
+  if (currentCapture.value.length) return 'Mina captures Felix’s pair'
+  return `Move ${visibleMoves.value} of ${moves.length}`
+})
 
 onMounted(() => {
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
@@ -64,9 +80,10 @@ function advanceReplay() {
 <template>
   <figure class="match-replay" aria-label="Replay of a Gobang match">
     <div class="match-replay__players">
-      <span>
+      <span :class="{ 'match-replay__player--winner': complete }">
         <AvatarImage seed="lobby-mina" color="black" size="small" />
         <strong>Mina</strong>
+        <Crown v-if="complete" class="match-replay__crown" :size="18" aria-label="Winner" />
         Black
       </span>
       <span>
@@ -78,6 +95,11 @@ function advanceReplay() {
 
     <div class="match-replay__board" role="img" :aria-label="replayStatus">
       <span v-for="position in cells" :key="position" class="match-replay__point">
+        <i
+          v-if="currentCapture.includes(position)"
+          class="match-replay__capture"
+          aria-hidden="true"
+        />
         <i
           v-if="stones.get(position)"
           :class="[
@@ -123,12 +145,34 @@ function advanceReplay() {
   gap: 0.45rem;
   color: var(--color-text-muted);
   font-weight: 700;
+  transition: background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.match-replay__players > .match-replay__player--winner {
+  margin-left: -0.35rem;
+  padding: 0.25rem 0.45rem 0.25rem 0.35rem;
+  border-radius: 5px;
+  color: var(--color-green-dark);
+  background: #dfece3;
+  box-shadow: inset 3px 0 0 var(--color-green);
 }
 
 .match-replay__players strong {
   color: var(--color-text);
   font-size: 0.82rem;
   text-transform: none;
+}
+
+.match-replay__crown {
+  color: #b47a08;
+  filter: drop-shadow(0 2px 2px rgba(103, 70, 5, 0.2));
+  animation: replay-crown-in 600ms cubic-bezier(0.2, 1.5, 0.5, 1) both;
+}
+
+@keyframes replay-crown-in {
+  from { transform: translateY(0.5rem) rotate(-18deg) scale(0.35); opacity: 0; }
+  65% { transform: translateY(-0.15rem) rotate(8deg) scale(1.12); }
+  to { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
 }
 
 .match-replay__board {
@@ -190,6 +234,21 @@ function advanceReplay() {
   outline-offset: 2px;
 }
 
+.match-replay__capture {
+  z-index: 2;
+  width: 82%;
+  aspect-ratio: 1;
+  border: 2px solid #c53c30;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  animation: replay-capture 650ms ease-out both;
+}
+
+@keyframes replay-capture {
+  from { transform: scale(0.5); opacity: 1; }
+  to { transform: scale(1.65); opacity: 0; }
+}
+
 @keyframes replay-stone-in {
   from { transform: scale(0.5); opacity: 0; }
 }
@@ -222,6 +281,12 @@ function advanceReplay() {
 
 @media (prefers-reduced-motion: reduce) {
   .match-replay__stone {
+    animation: none;
+  }
+
+
+  .match-replay__crown,
+  .match-replay__capture {
     animation: none;
   }
 }

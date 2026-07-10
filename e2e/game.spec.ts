@@ -48,6 +48,11 @@ test('ranked matchmaking waits, cancels, and pairs two accounts once', async ({
   await registerPlayer(first, firstName, `ranked-one-${suffix}@example.com`)
   await registerPlayer(second, secondName, `ranked-two-${suffix}@example.com`)
 
+  await expect(first.getByText('Mina captures Felix’s pair')).toBeVisible({ timeout: 12_000 })
+  await expect(first.locator('.match-replay__capture')).toHaveCount(2)
+  await expect(first.getByText('Mina wins — five in a row')).toBeVisible({ timeout: 10_000 })
+  await expect(first.locator('.match-replay__player--winner')).toContainText('Mina')
+  await expect(first.locator('.match-replay__crown')).toBeVisible()
   const replayBox = await first.getByLabel('Replay of a Gobang match').boundingBox()
   const entryBox = await first.locator('.lobby-entry').boundingBox()
   expect(replayBox).not.toBeNull()
