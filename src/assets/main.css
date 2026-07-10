@@ -666,27 +666,34 @@
   white-space: nowrap;
 }
 
-.capture-count {
-  display: grid;
-  min-width: 2.5rem;
-  min-height: 2rem;
-  align-content: center;
-  justify-items: center;
-  border-radius: 5px;
+.stone-total {
+  display: inline-flex;
+  min-width: 1.9rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   color: var(--color-text-muted);
-  background: var(--color-surface-muted);
 }
 
-.capture-count small {
-  font-size: 0.52rem;
-  font-weight: 800;
-  line-height: 1;
-  text-transform: uppercase;
+.stone-total i {
+  width: 0.65rem;
+  height: 0.65rem;
+  flex: 0 0 auto;
+  border: 1px solid #131915;
+  border-radius: 50%;
 }
 
-.capture-count strong {
-  font-size: 0.75rem;
-  line-height: 1.1;
+.stone-total--black i {
+  background: #1d2520;
+}
+
+.stone-total--white i {
+  background: #fff;
+}
+
+.stone-total strong {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .turn-label {
@@ -831,9 +838,9 @@
     grid-template-columns: auto minmax(0, 1fr) 2.25rem;
   }
 
-  .capture-count {
-    min-width: 2rem;
-    min-height: 1.75rem;
+  .stone-total {
+    min-width: 1.65rem;
+    gap: 0.25rem;
   }
 
   .game-workspace {

@@ -41,6 +41,8 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
       exact: true,
     }),
   ).toBeVisible()
+  await expect(waitingPage.getByLabel('Black stones on board').locator('strong')).toHaveText('1')
+  await expect(waitingPage.getByLabel('White stones on board').locator('strong')).toHaveText('0')
   await expect(
     waitingPage.getByRole('gridcell', { name: 'Row 1, column 2', exact: true }),
   ).toBeEnabled()

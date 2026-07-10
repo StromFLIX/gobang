@@ -42,6 +42,12 @@ let unsubscribe: (() => void) | null = null
 const inviteCode = computed(() => String(route.params.inviteCode ?? ''))
 const blackPlayer = computed(() => playerById(game.value?.black_player_id ?? null))
 const whitePlayer = computed(() => playerById(game.value?.white_player_id ?? null))
+const blackStoneCount = computed(
+  () => game.value?.board.filter((stone) => stone === 'black').length ?? 0,
+)
+const whiteStoneCount = computed(
+  () => game.value?.board.filter((stone) => stone === 'white').length ?? 0,
+)
 const lastMove = computed(() => {
   const moves = game.value?.moves
   return moves?.length ? moves[moves.length - 1].position : null
@@ -338,11 +344,17 @@ function stoneFor(playerId: string): Stone | null {
             <strong>{{ blackPlayer?.display_name ?? 'Waiting' }}</strong>
             <small v-if="blackPlayer" class="player-short-id">{{ shortPlayerId(blackPlayer.id) }}</small>
           </div>
-          <span class="capture-count"><small>Pairs</small><strong>{{ game.black_captures }}</strong></span>
+          <span class="stone-total stone-total--black" aria-label="Black stones on board" title="Black stones on board">
+            <i aria-hidden="true" />
+            <strong>{{ blackStoneCount }}</strong>
+          </span>
         </div>
 
         <div :class="['player-rail player-rail--right', { 'player-rail--turn': game.status === 'active' && game.turn === 'white' }]">
-          <span class="capture-count"><small>Pairs</small><strong>{{ game.white_captures }}</strong></span>
+          <span class="stone-total stone-total--white" aria-label="White stones on board" title="White stones on board">
+            <i aria-hidden="true" />
+            <strong>{{ whiteStoneCount }}</strong>
+          </span>
           <div>
             <span class="stone-label">
               <em v-if="game.status === 'active' && game.turn === 'white'" class="turn-label">Turn</em>
