@@ -753,6 +753,17 @@
   font-size: 0.8rem;
 }
 
+.rematch-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.rematch-state--incoming {
+  color: #855a08;
+  font-weight: 800;
+}
+
 .score-line strong {
   color: var(--color-text);
 }

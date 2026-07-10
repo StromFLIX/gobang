@@ -76,6 +76,15 @@ const myRematchReady = computed(() => {
   if (!game.value || !player.value) return false
   return isHost.value ? game.value.host_rematch : game.value.guest_rematch
 })
+const opponentRematchReady = computed(() => {
+  if (!game.value || !player.value) return false
+  return isHost.value ? game.value.guest_rematch : game.value.host_rematch
+})
+const rematchStateLabel = computed(() => {
+  if (myRematchReady.value && opponentRematchReady.value) return 'Starting…'
+  if (opponentRematchReady.value) return 'Opponent wants a rematch'
+  return 'Waiting for opponent'
+})
 const statusLabel = computed(() => {
   if (!game.value) return ''
   if (game.value.status === 'waiting') return 'Waiting for player two'
@@ -388,8 +397,13 @@ function stoneFor(playerId: string): Stone | null {
               <RefreshCw :size="18" />
               {{ myRematchReady ? 'Cancel rematch' : 'Ready for rematch' }}
             </button>
-            <span v-if="game.host_rematch || game.guest_rematch" class="rematch-state">
-              {{ game.host_rematch && game.guest_rematch ? 'Starting…' : 'Waiting for the other player' }}
+            <span
+              v-if="game.host_rematch || game.guest_rematch"
+              :class="['rematch-state', { 'rematch-state--incoming': opponentRematchReady && !myRematchReady }]"
+              role="status"
+            >
+              <i v-if="opponentRematchReady && !myRematchReady" class="presence-dot presence-dot--rematch presence-dot--pulse" />
+              {{ rematchStateLabel }}
             </span>
           </div>
 
