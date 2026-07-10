@@ -1,6 +1,6 @@
 import asyncio
 import secrets
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -109,11 +109,13 @@ class GameService:
         choose_host_black: Callable[[], bool] | None = None,
         create_invite_code: Callable[[], str] | None = None,
         now: Callable[[], datetime] | None = None,
+        get_player: Callable[[str], Awaitable[Player | None]] | None = None,
     ) -> None:
         self._repository = repository
         self._choose_host_black = choose_host_black or (lambda: secrets.randbelow(2) == 0)
         self._create_invite_code = create_invite_code or (lambda: secrets.token_urlsafe(8))
         self._now = now or (lambda: datetime.now(UTC))
+        self._get_player = get_player
         self._locks: dict[str, asyncio.Lock] = {}
 
     async def create(self, host: Player) -> Game:
@@ -267,6 +269,18 @@ class GameService:
             )
 
         overall.setdefault(player.id, PeriodPerformance())
+        if self._get_player:
+            player_ids = list(profiles)
+            current_profiles = await asyncio.gather(
+                *(self._get_player(player_id) for player_id in player_ids)
+            )
+            profiles.update(
+                (player_id, current_profile)
+                for player_id, current_profile in zip(
+                    player_ids, current_profiles, strict=True
+                )
+                if current_profile is not None
+            )
         results.sort(
             key=lambda result: (
                 result.completed_at,

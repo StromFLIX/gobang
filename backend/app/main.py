@@ -54,7 +54,7 @@ def create_app(
         client = pocketbase or PocketBaseClient(resolved_settings)
         game_repository = repository or PocketBaseGameRepository(client)
         app.state.pocketbase = client
-        game_service = GameService(game_repository)
+        game_service = GameService(game_repository, get_player=client.get_player)
         resolved_invitation_repository = invitation_repository or PocketBaseInvitationRepository(
             client
         )

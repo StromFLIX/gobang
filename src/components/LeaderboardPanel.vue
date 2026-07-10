@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, RefreshCw, Swords, Trophy, Users } from '@lucide/vue'
+import { Check, ChevronLeft, ChevronRight, RefreshCw, Search, Swords, Trophy, Users } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
 import AvatarImage from '@/components/AvatarImage.vue'
@@ -33,10 +33,13 @@ defineEmits<{ retry: []; challenge: [playerId: string] }>()
 type Period = keyof PeriodPerformance
 type View = 'overall' | 'friends'
 type OverallScope = 'nearby' | 'top' | 'all'
+const OVERALL_PAGE_SIZE = 10
 
 const period = ref<Period>('last_7_days')
 const view = ref<View>('overall')
 const overallScope = ref<OverallScope>('nearby')
+const overallPage = ref(1)
+const overallQuery = ref('')
 
 const overallRows = computed(() =>
   [...(props.leaderboard?.overall ?? [])].sort(
@@ -50,13 +53,42 @@ const overallRows = computed(() =>
   ),
 )
 
+const filteredOverallRows = computed(() => {
+  const query = overallQuery.value.trim().toLocaleLowerCase()
+  if (!query) return overallRows.value
+  return overallRows.value.filter(
+    (entry) =>
+      entry.player.display_name.toLocaleLowerCase().includes(query) ||
+      shortPlayerId(entry.player.id).toLocaleLowerCase().includes(query),
+  )
+})
+
 const visibleOverallRows = computed(() => {
-  if (overallScope.value === 'top') return overallRows.value.slice(0, 10)
-  if (overallScope.value === 'all') return overallRows.value
+  if (overallQuery.value.trim() || overallScope.value !== 'nearby') {
+    const start = (activeOverallPage.value - 1) * OVERALL_PAGE_SIZE
+    return filteredOverallRows.value.slice(start, start + OVERALL_PAGE_SIZE)
+  }
   const playerIndex = overallRows.value.findIndex((entry) => entry.player.id === props.playerId)
   if (playerIndex < 0) return overallRows.value.slice(0, 11)
   const start = Math.max(0, Math.min(playerIndex - 5, overallRows.value.length - 11))
   return overallRows.value.slice(start, start + 11)
+})
+
+const overallPageCount = computed(() =>
+  Math.max(1, Math.ceil(filteredOverallRows.value.length / OVERALL_PAGE_SIZE)),
+)
+
+const activeOverallPage = computed(() =>
+  Math.min(overallPage.value, overallPageCount.value),
+)
+
+const pageRankRange = computed(() => {
+  const start = (activeOverallPage.value - 1) * OVERALL_PAGE_SIZE + 1
+  const end = Math.min(
+    activeOverallPage.value * OVERALL_PAGE_SIZE,
+    filteredOverallRows.value.length,
+  )
+  return overallQuery.value.trim() ? `Results ${start}–${end}` : `Ranks ${start}–${end}`
 })
 
 const friendRows = computed(() =>
@@ -115,6 +147,28 @@ function selected(entry: LeaderboardEntry | HeadToHeadEntry) {
 
 function rankFor(entry: LeaderboardEntry) {
   return overallRows.value.findIndex((row) => row.player.id === entry.player.id) + 1
+}
+
+function selectOverallScope(scope: OverallScope) {
+  overallQuery.value = ''
+  overallScope.value = scope
+  if (scope === 'top') {
+    overallPage.value = 1
+    return
+  }
+  if (scope === 'all') {
+    const playerIndex = overallRows.value.findIndex((entry) => entry.player.id === props.playerId)
+    overallPage.value = playerIndex < 0 ? 1 : Math.floor(playerIndex / OVERALL_PAGE_SIZE) + 1
+  }
+}
+
+function resetOverallPage() {
+  overallPage.value = 1
+}
+
+function changeOverallPage(page: number) {
+  overallPage.value = Math.max(1, Math.min(page, overallPageCount.value))
+  overallScope.value = overallPage.value === 1 ? 'top' : 'all'
 }
 
 function canChallengeEntry(entry: LeaderboardEntry) {
@@ -220,16 +274,29 @@ function resultDate(result: LeaderboardResult) {
       </div>
 
       <div v-if="view === 'overall'" class="standings" role="table" aria-label="Overall standings">
-        <div class="ranking-scope" aria-label="Leaderboard range">
-          <button type="button" :class="{ active: overallScope === 'nearby' }" @click="overallScope = 'nearby'">
-            Around you
-          </button>
-          <button type="button" :class="{ active: overallScope === 'top' }" @click="overallScope = 'top'">
-            Top 10
-          </button>
-          <button type="button" :class="{ active: overallScope === 'all' }" @click="overallScope = 'all'">
-            All players
-          </button>
+        <div class="ranking-toolbar">
+          <div class="ranking-scope" aria-label="Leaderboard range">
+            <button type="button" :class="{ active: !overallQuery && overallScope === 'nearby' }" @click="selectOverallScope('nearby')">
+              Around you
+            </button>
+            <button type="button" :class="{ active: !overallQuery && overallScope === 'top' }" @click="selectOverallScope('top')">
+              Top 10
+            </button>
+            <button type="button" :class="{ active: !overallQuery && overallScope === 'all' }" @click="selectOverallScope('all')">
+              All players
+            </button>
+          </div>
+          <label class="standing-search">
+            <Search :size="16" />
+            <input
+              v-model="overallQuery"
+              type="search"
+              autocomplete="off"
+              aria-label="Find a player"
+              placeholder="Find player"
+              @input="resetOverallPage"
+            />
+          </label>
         </div>
         <p v-if="!canChallenge" class="challenge-note">Create an account to challenge ranked players.</p>
         <div class="standings__header" role="row">
@@ -270,6 +337,39 @@ function resultDate(result: LeaderboardResult) {
             </button>
           </span>
         </div>
+        <p v-if="!visibleOverallRows.length" class="leaderboard-state leaderboard-state--compact">
+          No players match that search.
+        </p>
+        <nav
+          v-if="(overallQuery.trim() || overallScope !== 'nearby') && overallPageCount > 1"
+          class="standings-pagination"
+          aria-label="Leaderboard pages"
+        >
+          <button
+            type="button"
+            class="icon-button icon-button--muted"
+            :disabled="activeOverallPage === 1"
+            title="Previous page"
+            aria-label="Previous leaderboard page"
+            @click="changeOverallPage(activeOverallPage - 1)"
+          >
+            <ChevronLeft :size="19" />
+          </button>
+          <span aria-live="polite">
+            <strong>Page {{ activeOverallPage }} of {{ overallPageCount }}</strong>
+            <small>{{ pageRankRange }}</small>
+          </span>
+          <button
+            type="button"
+            class="icon-button icon-button--muted"
+            :disabled="activeOverallPage === overallPageCount"
+            title="Next page"
+            aria-label="Next leaderboard page"
+            @click="changeOverallPage(activeOverallPage + 1)"
+          >
+            <ChevronRight :size="19" />
+          </button>
+        </nav>
       </div>
 
       <div v-else-if="friendRows.length" class="matchup-list">
@@ -418,10 +518,17 @@ function resultDate(result: LeaderboardResult) {
   padding: 0.5rem 1.25rem 1.25rem;
 }
 
+.ranking-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.35rem 0 0.45rem;
+}
+
 .ranking-scope {
   display: flex;
   width: fit-content;
-  margin: 0.35rem 0 0.45rem;
   padding: 0.2rem;
   border: 1px solid var(--color-border);
   border-radius: 6px;
@@ -444,6 +551,36 @@ function resultDate(result: LeaderboardResult) {
   box-shadow: 0 1px 4px rgba(23, 34, 28, 0.12);
 }
 
+.standing-search {
+  position: relative;
+  display: flex;
+  width: min(100%, 13rem);
+  align-items: center;
+}
+
+.standing-search svg {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.standing-search input {
+  width: 100%;
+  min-height: 2.4rem;
+  padding: 0.45rem 0.65rem 0.45rem 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  outline: none;
+  background: #fbfcfb;
+  font-size: 0.76rem;
+}
+
+.standing-search input:focus {
+  border-color: var(--color-green);
+  box-shadow: 0 0 0 3px rgba(36, 102, 70, 0.12);
+}
+
 .challenge-note {
   margin-bottom: 0.3rem;
   color: var(--color-text-muted);
@@ -464,8 +601,8 @@ function resultDate(result: LeaderboardResult) {
 }
 
 .challenge-action .icon-button {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.75rem;
+  height: 2.75rem;
 }
 
 .challenge-sent {
@@ -488,6 +625,29 @@ function resultDate(result: LeaderboardResult) {
 .standing-row {
   min-height: 3.25rem;
   border-top: 1px solid var(--color-border);
+}
+
+.standings-pagination {
+  display: grid;
+  width: fit-content;
+  grid-template-columns: 2.75rem minmax(7.5rem, auto) 2.75rem;
+  gap: 0.55rem;
+  align-items: center;
+  margin: 1rem auto 0;
+}
+
+.standings-pagination > span {
+  display: grid;
+  text-align: center;
+}
+
+.standings-pagination strong {
+  font-size: 0.78rem;
+}
+
+.standings-pagination small {
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
 }
 
 .standing-row--current {
@@ -630,6 +790,10 @@ function resultDate(result: LeaderboardResult) {
   color: var(--color-red);
 }
 
+.leaderboard-state--compact {
+  min-height: 4rem;
+}
+
 @media (max-width: 760px) {
   .leaderboard-panel {
     grid-column: 1;
@@ -654,6 +818,15 @@ function resultDate(result: LeaderboardResult) {
     display: grid;
     width: 100%;
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .ranking-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .standing-search {
+    width: 100%;
   }
 
   .period-control button {
@@ -691,7 +864,7 @@ function resultDate(result: LeaderboardResult) {
 
   .standings__header,
   .standing-row {
-    grid-template-columns: 2rem minmax(0, 1fr) 3.25rem 2.5rem;
+    grid-template-columns: 2rem minmax(0, 1fr) 3.25rem 2.75rem;
   }
 
   .standings__header span:nth-child(4),

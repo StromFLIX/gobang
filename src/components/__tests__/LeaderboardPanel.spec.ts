@@ -122,4 +122,54 @@ describe('LeaderboardPanel', () => {
     expect(wrapper.find('button[aria-label="Challenge Alex"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Sent')
   })
+
+  it('opens the top ten on page one and pages through absolute ranks', async () => {
+    const data = leaderboard()
+    data.overall = Array.from({ length: 25 }, (_, index) => ({
+      player:
+        index === 17
+          ? me
+          : {
+              id: `player-${index + 1}`,
+              display_name: `Player ${index + 1}`,
+              avatar_seed: `player-${index + 1}`,
+              is_guest: false,
+            },
+      performance: {
+        last_7_days: performance(1, 0),
+        all_time: performance(1, 0),
+      },
+      elo_rating: 1400 - index,
+    }))
+    data.player = data.overall[17]
+    const wrapper = mount(LeaderboardPanel, {
+      props: {
+        leaderboard: data,
+        playerId: me.id,
+        loading: false,
+        error: '',
+        canChallenge: true,
+      },
+    })
+
+    await wrapper.findAll('.ranking-scope button')[1].trigger('click')
+    expect(wrapper.findAll('.standing-row')).toHaveLength(10)
+    expect(wrapper.findAll('.standing-rank')[0].text()).toBe('1')
+    expect(wrapper.findAll('.standing-rank')[9].text()).toBe('10')
+    expect(wrapper.text()).toContain('Page 1 of 3')
+
+    await wrapper.get('button[aria-label="Next leaderboard page"]').trigger('click')
+    expect(wrapper.findAll('.standing-row')).toHaveLength(10)
+    expect(wrapper.findAll('.standing-rank')[0].text()).toBe('11')
+    expect(wrapper.findAll('.standing-rank')[9].text()).toBe('20')
+    expect(wrapper.text()).toContain('Page 2 of 3')
+
+    await wrapper.findAll('.ranking-scope button')[2].trigger('click')
+    expect(wrapper.text()).toContain('Page 2 of 3')
+    expect(wrapper.find('.standing-row--current').exists()).toBe(true)
+
+    await wrapper.get('input[aria-label="Find a player"]').setValue('Player 25')
+    expect(wrapper.findAll('.standing-row')).toHaveLength(1)
+    expect(wrapper.find('.standing-player').text()).toContain('Player 25')
+  })
 })

@@ -298,3 +298,33 @@ async def test_leaderboard_combines_recent_and_legacy_results(
     assert leaderboard.opponents[0].opponent == GUEST
     assert leaderboard.opponents[0].performance.all_time.games_played == 4
     assert leaderboard.results[0].winner == GUEST
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_refreshes_registered_player_profiles(
+    repository: MemoryRepository,
+) -> None:
+    registered_guest = replace(GUEST, is_guest=False)
+
+    async def get_player(player_id: str) -> Player | None:
+        return registered_guest if player_id == GUEST.id else None
+
+    service = GameService(
+        repository,
+        choose_host_black=lambda: True,
+        create_invite_code=lambda: "invite-code",
+        now=lambda: COMPLETED_AT,
+        get_player=get_player,
+    )
+    repository.games["history"] = Game(
+        id="history",
+        invite_code="history-code",
+        host=HOST,
+        guest=GUEST,
+        host_score=1,
+    )
+
+    leaderboard = await service.leaderboard(HOST)
+
+    guest = next(entry for entry in leaderboard.overall if entry.player.id == GUEST.id)
+    assert guest.player == registered_guest

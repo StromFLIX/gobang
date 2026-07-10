@@ -18,6 +18,7 @@ async function registerPlayer(page: Page, name: string, email: string) {
   await dialog.getByLabel('Confirm password').fill('BrowserPass42!')
   await dialog.locator('form').getByRole('button', { name: 'Create account' }).click()
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await expect(page.locator('.account-summary__name')).toHaveText(name)
 }
 
 async function authenticatedGames(page: Page) {
@@ -94,8 +95,16 @@ test('registered players can challenge from the leaderboard and accept in realti
 
   await challenger.getByRole('link', { name: 'Back to lobby' }).click()
   await recipient.getByRole('link', { name: 'Back to lobby' }).click()
+  await challenger.setViewportSize({ width: 390, height: 844 })
   await challenger.getByRole('button', { name: 'All players' }).click()
-  await challenger.getByRole('button', { name: `Challenge ${recipientName}` }).click()
+  await challenger.getByRole('searchbox', { name: 'Find a player' }).fill(recipientName)
+  const challengeButton = challenger.getByRole('button', { name: `Challenge ${recipientName}` })
+  const challengeButtonBox = await challengeButton.boundingBox()
+  expect(challengeButtonBox).not.toBeNull()
+  expect(challengeButtonBox!.width).toBeGreaterThanOrEqual(44)
+  expect(challengeButtonBox!.x + challengeButtonBox!.width).toBeLessThanOrEqual(390)
+  await challenger.screenshot({ path: 'test-results/mobile-leaderboard-challenge.png' })
+  await challengeButton.click()
   await expect(
     challenger.getByRole('button', { name: `Challenge ${recipientName}` }),
   ).toBeHidden()
