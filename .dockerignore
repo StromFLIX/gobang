@@ -1,0 +1,14 @@
+.git
+.github
+.idea
+.vscode
+backend/.pytest_cache
+backend/.ruff_cache
+backend/.venv
+backend/**/__pycache__
+coverage
+dist
+node_modules
+pocketbase/pb_data
+*.log
+*.local

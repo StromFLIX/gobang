@@ -1,28 +1,101 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed } from 'vue'
 import { createAvatar } from '@dicebear/core'
 import { openPeeps } from '@dicebear/collection'
 
-const { seed = 'player4', color = "black", borderSize = "small" } = defineProps<{ seed?: string, color?: ("white" | "black"), borderSize?: ("small" | "large") }>()
+import { decodeAvatar, isCustomAvatar } from '@/logic/avatar'
 
-// Create a reactive variable to hold the generated avatar SVG
-const avatarSVG = ref('')
+const props = withDefaults(
+  defineProps<{
+    seed?: string
+    color?: 'black' | 'white' | 'neutral'
+    size?: 'small' | 'medium' | 'large' | 'editor' | 'stone'
+  }>(),
+  { seed: 'player4', color: 'neutral', size: 'medium' },
+)
 
-onMounted(() => {
-  // Create an avatar using openPeeps
-  const avatar = createAvatar(openPeeps, {
-    seed: seed, // change this seed for different avatars
-    // ... add more options as needed
-    radius: 50,
-  })
-  // Convert the avatar to an SVG string
-  avatarSVG.value = avatar.toString()
+const avatarUrl = computed(() => {
+  const options = isCustomAvatar(props.seed)
+    ? customAvatarOptions(props.seed)
+    : { seed: props.seed, radius: 50 }
+  const svg = createAvatar(openPeeps, options)
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg.toString())}`
 })
+
+function customAvatarOptions(value: string) {
+  const config = decodeAvatar(value)
+  return {
+    seed: 'custom-player',
+    radius: 50,
+    head: [config.hair],
+    face: [config.face],
+    accessories: config.accessory === 'none' ? undefined : [config.accessory],
+    accessoriesProbability: config.accessory === 'none' ? 0 : 100,
+    facialHair: config.facialHair === 'none' ? undefined : [config.facialHair],
+    facialHairProbability: config.facialHair === 'none' ? 0 : 100,
+    skinColor: [config.skin],
+    clothingColor: [config.shirt],
+  }
+}
 </script>
 
 <template>
-  <div :class="[
-      ' w-5 h-5 sm:h-8 sm:w-8 inline-block size-6 rounded-full',
-      color === 'white' ? 'bg-blue-400' : 'bg-red-400'
-    ]" v-html="avatarSVG"></div>
+  <span :class="['avatar', `avatar--${color}`, `avatar--${size}`]" aria-hidden="true">
+    <img :src="avatarUrl" alt="" draggable="false" />
+  </span>
 </template>
+
+<style scoped>
+.avatar {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(24, 34, 28, 0.16);
+  border-radius: 50%;
+  background: #e8ece8;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+
+.avatar--black {
+  border-color: #17221c;
+  background: #26352d;
+}
+
+.avatar--white {
+  border-color: #87928b;
+  background: #f9f7ef;
+}
+
+.avatar--small {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.avatar--medium {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.avatar--large {
+  width: 3.25rem;
+  height: 3.25rem;
+}
+
+.avatar--editor {
+  width: 7.5rem;
+  height: 7.5rem;
+}
+
+.avatar--stone {
+  width: 100%;
+  height: 100%;
+  box-shadow: 0 2px 5px rgba(23, 34, 28, 0.32);
+}
+</style>

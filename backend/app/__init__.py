@@ -1,0 +1,1 @@
+"""Gobang backend application."""

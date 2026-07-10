@@ -1,0 +1,23 @@
+{
+	auto_https off
+	admin off
+}
+
+:80 {
+	encode zstd gzip
+
+	@pocketbase_admin path /pb/_* /pb/api/backups* /pb/api/collections /pb/api/settings*
+	handle @pocketbase_admin {
+		respond 404
+	}
+
+	handle_path /pb/* {
+		reverse_proxy pocketbase:8090 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy app:8000
+	}
+}

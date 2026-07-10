@@ -1,36 +1,365 @@
 <script setup lang="ts">
-import GridComponent from '@/components/GridComponent.vue'
-import VersusFooter from '@/components/VersusFooter.vue'
+import {
+  ArrowRight,
+  Grid3X3,
+  Link2,
+  LogIn,
+  LogOut,
+  Plus,
+  X,
+} from '@lucide/vue'
+import { onMounted, ref, watch } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 
-const players = [{name: "Flo", seed: "player4"}, {name:"Felix", seed:"player25"}]
+import AvatarImage from '@/components/AvatarImage.vue'
+import AvatarPicker from '@/components/AvatarPicker.vue'
+import { useSession } from '@/composables/useSession'
+import { AVATAR_PRESETS } from '@/logic/avatar'
+import { ApiError, api } from '@/services/api'
+import type { Game } from '@/types/game'
 
-function shuffleArray(arr: {name: string, seed: string}[]) {
-  // Loop from the end of the array to the beginning
-  for (let i = arr.length - 1; i > 0; i--) {
-    // Pick a random index from 0 to i
-    const j = Math.floor(Math.random() * (i + 1));
-    // Swap elements at indices i and j
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+const router = useRouter()
+const {
+  player,
+  ready,
+  profileConfigured,
+  bootstrapSession,
+  updateProfile,
+  register,
+  login,
+  logout,
+} = useSession()
+
+const displayName = ref('')
+const avatarSeed = ref<string>(AVATAR_PRESETS[0])
+const inviteCode = ref('')
+const games = ref<Game[]>([])
+const busy = ref(false)
+const pageError = ref('')
+const authOpen = ref(false)
+const authMode = ref<'login' | 'register'>('register')
+const email = ref('')
+const password = ref('')
+const passwordConfirm = ref('')
+const authError = ref('')
+
+watch(
+  player,
+  (value) => {
+    if (!value) return
+    displayName.value = value.display_name === 'Player' ? '' : value.display_name
+    avatarSeed.value = value.avatar_seed || AVATAR_PRESETS[0]
+  },
+  { immediate: true },
+)
+
+onMounted(async () => {
+  await bootstrapSession()
+  await loadGames()
+})
+
+async function loadGames() {
+  try {
+    games.value = (await api.listGames()).filter((game) => game.status !== 'cancelled')
+  } catch {
+    games.value = []
   }
-  return arr;
 }
 
-const shuffledPlayers = shuffleArray(players)
+async function saveProfile() {
+  const name = displayName.value.trim()
+  if (!name) {
+    pageError.value = 'Choose a player name first.'
+    return false
+  }
+  await updateProfile(name, avatarSeed.value)
+  pageError.value = ''
+  return true
+}
 
+async function ensureProfile() {
+  if (profileConfigured.value && displayName.value.trim()) return true
+  return saveProfile()
+}
+
+async function createRoom() {
+  if (busy.value || !(await ensureProfile())) return
+  busy.value = true
+  pageError.value = ''
+  try {
+    const game = await api.createGame()
+    await router.push(`/game/${game.invite_code}`)
+  } catch (error) {
+    pageError.value = error instanceof ApiError ? error.message : 'Could not create the room.'
+  } finally {
+    busy.value = false
+  }
+}
+
+function normalizedInviteCode() {
+  const value = inviteCode.value.trim()
+  const match = value.match(/\/game\/([^/?#]+)/)
+  return decodeURIComponent(match?.[1] ?? value)
+}
+
+async function joinRoom() {
+  if (busy.value || !(await ensureProfile())) return
+  const code = normalizedInviteCode()
+  if (!code) {
+    pageError.value = 'Enter a room link or code.'
+    return
+  }
+  await router.push(`/game/${encodeURIComponent(code)}`)
+}
+
+function openAuth(mode: 'login' | 'register') {
+  authMode.value = mode
+  authError.value = ''
+  password.value = ''
+  passwordConfirm.value = ''
+  authOpen.value = true
+}
+
+async function submitAuth() {
+  authError.value = ''
+  if (authMode.value === 'register' && password.value !== passwordConfirm.value) {
+    authError.value = 'Passwords do not match.'
+    return
+  }
+  busy.value = true
+  try {
+    if (authMode.value === 'register') {
+      await register(email.value, password.value)
+    } else {
+      await login(email.value, password.value)
+    }
+    authOpen.value = false
+    await loadGames()
+  } catch (error) {
+    authError.value = error instanceof ApiError ? error.message : 'Could not sign in.'
+  } finally {
+    busy.value = false
+  }
+}
+
+async function signOut() {
+  await logout()
+  games.value = []
+}
+
+function opponentName(game: Game) {
+  if (!player.value || !game.guest) return 'Waiting for player two'
+  return game.host.id === player.value.id ? game.guest.display_name : game.host.display_name
+}
+
+function gameLabel(game: Game) {
+  if (game.status === 'waiting') return 'Waiting'
+  const turnPlayerId = game.turn === 'black' ? game.black_player_id : game.white_player_id
+  if (game.status === 'active') return turnPlayerId === player.value?.id ? 'Your turn' : 'In progress'
+  if (game.status === 'draw') return 'Draw'
+  return game.winner_player_id === player.value?.id ? 'Won' : 'Finished'
+}
 </script>
 
 <template>
-  <div class="mx-auto min-w-screen">
-    <div class="flex flex-col min-h-screen">
-      <!-- Main area: center the grid -->
-      <main class="flex-grow flex justify-center items-center">
-        <GridComponent :players="shuffledPlayers"/>
-      </main>
-      <!-- Footer area -->
-      <div class="flex-col flex-grow flex justify-center items-center">
-        <div class="flex-grow"></div>
-        <VersusFooter :players="shuffledPlayers"/>
+  <div class="app-shell">
+    <header class="app-header">
+      <RouterLink to="/" class="brand-mark" aria-label="Gobang home">
+        <Grid3X3 :size="22" />
+        <strong>Gobang</strong>
+      </RouterLink>
+
+      <div v-if="ready && player" class="account-summary">
+        <AvatarImage :seed="player.avatar_seed" size="small" />
+        <span class="account-summary__name">{{ player.display_name }}</span>
+        <button
+          v-if="player.is_guest"
+          type="button"
+          class="button button--quiet"
+          @click="openAuth('register')"
+        >
+          <LogIn :size="17" />
+          Sign in
+        </button>
+        <button
+          v-else
+          type="button"
+          class="icon-button icon-button--muted"
+          title="Sign out"
+          aria-label="Sign out"
+          @click="signOut"
+        >
+          <LogOut :size="18" />
+        </button>
       </div>
+    </header>
+
+    <main v-if="ready && player" class="lobby-layout">
+      <section class="lobby-heading">
+        <p class="section-kicker">Private match</p>
+        <h1>Ready your player.</h1>
+      </section>
+
+      <section class="profile-tool" aria-labelledby="profile-title">
+        <div class="section-heading-row">
+          <div>
+            <p class="section-kicker">Player</p>
+            <h2 id="profile-title">Name and avatar</h2>
+          </div>
+          <span class="session-badge">{{ player.is_guest ? 'This device' : 'Account' }}</span>
+        </div>
+
+        <label class="field-label" for="player-name">Name</label>
+        <input
+          id="player-name"
+          v-model="displayName"
+          class="text-input"
+          maxlength="24"
+          autocomplete="nickname"
+          placeholder="Your name"
+          @change="pageError = ''"
+        />
+
+        <span class="field-label">Avatar</span>
+        <AvatarPicker v-model="avatarSeed" />
+
+        <button type="button" class="button button--secondary profile-save" @click="saveProfile">
+          Save player
+        </button>
+      </section>
+
+      <section class="room-tool" aria-labelledby="room-title">
+        <div class="section-heading-row">
+          <div>
+            <p class="section-kicker">Match</p>
+            <h2 id="room-title">Open or join a room</h2>
+          </div>
+        </div>
+
+        <button type="button" class="button button--primary create-room" :disabled="busy" @click="createRoom">
+          <Plus :size="20" />
+          New room
+        </button>
+
+        <div class="join-divider"><span>or</span></div>
+
+        <label class="field-label" for="invite-code">Room link or code</label>
+        <div class="join-row">
+          <span class="input-icon"><Link2 :size="18" /></span>
+          <input
+            id="invite-code"
+            v-model="inviteCode"
+            class="text-input text-input--icon"
+            autocomplete="off"
+            placeholder="Paste invite"
+            @keyup.enter="joinRoom"
+          />
+          <button
+            type="button"
+            class="icon-button icon-button--confirm"
+            :disabled="busy"
+            title="Join room"
+            aria-label="Join room"
+            @click="joinRoom"
+          >
+            <ArrowRight :size="20" />
+          </button>
+        </div>
+
+        <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
+      </section>
+
+      <section v-if="games.length" class="recent-games" aria-labelledby="recent-title">
+        <div class="section-heading-row">
+          <div>
+            <p class="section-kicker">Rooms</p>
+            <h2 id="recent-title">Recent games</h2>
+          </div>
+        </div>
+        <div class="game-list">
+          <RouterLink
+            v-for="game in games"
+            :key="game.id"
+            :to="`/game/${game.invite_code}`"
+            class="game-list-item"
+          >
+            <div class="game-list-item__players">
+              <AvatarImage :seed="game.host.avatar_seed" size="small" />
+              <div>
+                <strong>{{ opponentName(game) }}</strong>
+                <span>Round {{ game.round }} · {{ game.host_score }}–{{ game.guest_score }}</span>
+              </div>
+            </div>
+            <span class="game-list-item__status">{{ gameLabel(game) }}</span>
+            <ArrowRight :size="18" />
+          </RouterLink>
+        </div>
+      </section>
+    </main>
+
+    <main v-else class="loading-screen" aria-live="polite">
+      <span class="loading-mark"><Grid3X3 :size="28" /></span>
+      <p>Opening your player…</p>
+    </main>
+
+    <div v-if="authOpen" class="modal-backdrop" @click.self="authOpen = false">
+      <section class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <div class="dialog-header">
+          <div>
+            <p class="section-kicker">Account</p>
+            <h2 id="auth-title">{{ authMode === 'register' ? 'Create account' : 'Sign in' }}</h2>
+          </div>
+          <button
+            type="button"
+            class="icon-button icon-button--muted"
+            title="Close"
+            aria-label="Close"
+            @click="authOpen = false"
+          >
+            <X :size="19" />
+          </button>
+        </div>
+
+        <div class="segmented-control" aria-label="Account action">
+          <button type="button" :class="{ active: authMode === 'register' }" @click="authMode = 'register'">
+            Create account
+          </button>
+          <button type="button" :class="{ active: authMode === 'login' }" @click="authMode = 'login'">
+            Sign in
+          </button>
+        </div>
+
+        <form class="auth-form" @submit.prevent="submitAuth">
+          <label class="field-label" for="account-email">Email</label>
+          <input id="account-email" v-model="email" class="text-input" type="email" required autocomplete="email" />
+          <label class="field-label" for="account-password">Password</label>
+          <input
+            id="account-password"
+            v-model="password"
+            class="text-input"
+            type="password"
+            minlength="8"
+            required
+            :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'"
+          />
+          <template v-if="authMode === 'register'">
+            <label class="field-label" for="account-password-confirm">Confirm password</label>
+            <input
+              id="account-password-confirm"
+              v-model="passwordConfirm"
+              class="text-input"
+              type="password"
+              minlength="8"
+              required
+              autocomplete="new-password"
+            />
+          </template>
+          <p v-if="authError" class="form-error" role="alert">{{ authError }}</p>
+          <button type="submit" class="button button--primary" :disabled="busy">
+            {{ authMode === 'register' ? 'Create account' : 'Sign in' }}
+          </button>
+        </form>
+      </section>
     </div>
   </div>
 </template>
