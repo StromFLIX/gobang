@@ -586,6 +586,27 @@
   margin-top: 0.35rem;
 }
 
+.progress-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.progress-choice p,
+.progress-dialog__note {
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.progress-choice .button--primary {
+  margin-top: 0.35rem;
+}
+
+.progress-dialog .auth-form {
+  padding-top: 0;
+}
+
 .profile-gate .profile-tool {
   width: min(100%, 30rem);
   text-align: left;

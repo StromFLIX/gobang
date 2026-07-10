@@ -8,11 +8,12 @@ import {
   House,
   RefreshCw,
   Share2,
+  UserPlus,
   Wifi,
   WifiOff,
   X,
 } from '@lucide/vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import AvatarImage from '@/components/AvatarImage.vue'
@@ -26,7 +27,7 @@ import { subscribeToGame } from '@/services/pocketbase'
 import type { Game, Player, Stone } from '@/types/game'
 
 const route = useRoute()
-const { player, ready, profileConfigured, bootstrapSession, updateProfile } = useSession()
+const { player, ready, profileConfigured, bootstrapSession, updateProfile, register } = useSession()
 const game = ref<Game | null>(null)
 const loading = ref(true)
 const pageError = ref('')
@@ -37,7 +38,14 @@ const copied = ref(false)
 const resignArmed = ref(false)
 const displayName = ref('')
 const avatarSeed = ref<string>(AVATAR_PRESETS[0])
-let unsubscribe: (() => void) | null = null
+const accountPromptOpen = ref(false)
+const accountPromptStep = ref<'offer' | 'register'>('offer')
+const accountEmail = ref('')
+const accountPassword = ref('')
+const accountPasswordConfirm = ref('')
+const accountError = ref('')
+const accountSaving = ref(false)
+let unsubscribe: (() => Promise<void>) | null = null
 
 const inviteCode = computed(() => String(route.params.inviteCode ?? ''))
 const blackPlayer = computed(() => playerById(game.value?.black_player_id ?? null))
@@ -103,6 +111,20 @@ const statusLabel = computed(() => {
   return isMyTurn.value ? 'Your turn' : 'Waiting'
 })
 
+watch(
+  [isTerminal, () => player.value?.is_guest, () => game.value?.id],
+  ([terminal, isGuest, gameId]) => {
+    if (!isGuest) {
+      accountPromptOpen.value = false
+      return
+    }
+    if (terminal && gameId && !sessionStorage.getItem(accountPromptKey(gameId))) {
+      accountPromptOpen.value = true
+    }
+  },
+  { flush: 'post' },
+)
+
 onMounted(async () => {
   await bootstrapSession()
   if (player.value) {
@@ -116,7 +138,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  unsubscribe?.()
+  void unsubscribe?.()
   window.removeEventListener('online', handleOnline)
   window.removeEventListener('offline', handleOffline)
 })
@@ -164,7 +186,8 @@ async function joinRoom() {
 }
 
 async function startSubscription() {
-  unsubscribe?.()
+  await unsubscribe?.()
+  unsubscribe = null
   if (!game.value) return
   unsubscribe = await subscribeToGame(game.value.id, (nextGame) => {
     if (!game.value || nextGame.revision >= game.value.revision) game.value = nextGame
@@ -256,6 +279,46 @@ async function toggleRematch() {
     game.value = await api.setRematch(game.value.id, !myRematchReady.value)
   } finally {
     pending.value = false
+  }
+}
+
+function accountPromptKey(gameId: string) {
+  return `gobang.account-prompt.${gameId}`
+}
+
+function dismissAccountPrompt() {
+  if (game.value) sessionStorage.setItem(accountPromptKey(game.value.id), 'dismissed')
+  accountPromptOpen.value = false
+  accountPromptStep.value = 'offer'
+  accountError.value = ''
+  accountPassword.value = ''
+  accountPasswordConfirm.value = ''
+}
+
+function showAccountRegistration() {
+  accountPromptStep.value = 'register'
+  accountError.value = ''
+}
+
+async function registerAfterGame() {
+  accountError.value = ''
+  if (accountPassword.value !== accountPasswordConfirm.value) {
+    accountError.value = 'Passwords do not match.'
+    return
+  }
+  accountSaving.value = true
+  try {
+    await register(accountEmail.value, accountPassword.value)
+    accountPromptOpen.value = false
+    accountPromptStep.value = 'offer'
+    void startSubscription().catch(() => {
+      connection.value = 'reconnecting'
+    })
+  } catch (error) {
+    accountError.value =
+      error instanceof ApiError ? error.message : 'Could not create your account.'
+  } finally {
+    accountSaving.value = false
   }
 }
 
@@ -433,5 +496,93 @@ function stoneFor(playerId: string): Stone | null {
         </aside>
       </section>
     </main>
+
+    <div v-if="accountPromptOpen" class="modal-backdrop" @click.self="dismissAccountPrompt">
+      <section
+        class="auth-dialog progress-dialog"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="accountPromptStep === 'offer' ? 'progress-title' : 'progress-register-title'"
+      >
+        <div class="dialog-header">
+          <div>
+            <p class="section-kicker">Save progress</p>
+            <h2 v-if="accountPromptStep === 'offer'" id="progress-title">Keep your game history?</h2>
+            <h2 v-else id="progress-register-title">Create account</h2>
+          </div>
+          <button
+            type="button"
+            class="icon-button icon-button--muted"
+            title="Close"
+            aria-label="Close"
+            @click="dismissAccountPrompt"
+          >
+            <X :size="19" />
+          </button>
+        </div>
+
+        <div v-if="accountPromptStep === 'offer'" class="progress-choice">
+          <p>
+            This game is saved to this browser. Create an account to keep your games,
+            scores, and Elo when you switch devices.
+          </p>
+          <button type="button" class="button button--primary" @click="showAccountRegistration">
+            <UserPlus :size="18" />
+            Create account
+          </button>
+          <button type="button" class="button button--secondary" @click="dismissAccountPrompt">
+            Keep playing anonymously
+          </button>
+        </div>
+
+        <form v-else class="auth-form" @submit.prevent="registerAfterGame">
+          <p class="progress-dialog__note">
+            Your current player and finished games stay exactly as they are.
+          </p>
+          <label class="field-label" for="progress-account-email">Email</label>
+          <input
+            id="progress-account-email"
+            v-model="accountEmail"
+            class="text-input"
+            type="email"
+            required
+            autocomplete="email"
+          />
+          <label class="field-label" for="progress-account-password">Password</label>
+          <input
+            id="progress-account-password"
+            v-model="accountPassword"
+            class="text-input"
+            type="password"
+            minlength="8"
+            required
+            autocomplete="new-password"
+          />
+          <label class="field-label" for="progress-account-password-confirm">Confirm password</label>
+          <input
+            id="progress-account-password-confirm"
+            v-model="accountPasswordConfirm"
+            class="text-input"
+            type="password"
+            minlength="8"
+            required
+            autocomplete="new-password"
+          />
+          <p v-if="accountError" class="form-error" role="alert">{{ accountError }}</p>
+          <button type="submit" class="button button--primary" :disabled="accountSaving">
+            <UserPlus :size="18" />
+            Create account
+          </button>
+          <button
+            type="button"
+            class="button button--quiet"
+            :disabled="accountSaving"
+            @click="accountPromptStep = 'offer'"
+          >
+            Back
+          </button>
+        </form>
+      </section>
+    </div>
   </div>
 </template>

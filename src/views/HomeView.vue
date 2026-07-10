@@ -62,7 +62,7 @@ const mergeNotice = ref('')
 const profileEditing = ref(true)
 const profileSaving = ref(false)
 const showAllOpponents = ref(false)
-let gameUnsubscribes: (() => void)[] = []
+let gameUnsubscribes: (() => Promise<void>)[] = []
 
 const opponentGroups = computed(() =>
   player.value ? groupGamesByOpponent(games.value, player.value.id) : [],
@@ -120,12 +120,12 @@ async function syncGameSubscriptions() {
     }),
   )
   gameUnsubscribes = subscriptions.filter(
-    (unsubscribe): unsubscribe is () => void => unsubscribe !== null,
+    (unsubscribe): unsubscribe is () => Promise<void> => unsubscribe !== null,
   )
 }
 
 function clearGameSubscriptions() {
-  for (const unsubscribe of gameUnsubscribes) unsubscribe()
+  for (const unsubscribe of gameUnsubscribes) void unsubscribe()
   gameUnsubscribes = []
 }
 

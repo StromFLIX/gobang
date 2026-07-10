@@ -16,7 +16,7 @@ export function setRealtimeToken(token: string) {
 export async function subscribeToGame(
   gameId: string,
   onGame: (game: Game) => void,
-): Promise<() => void> {
+): Promise<() => Promise<void>> {
   return pocketbase.collection('games').subscribe(gameId, (event) => {
     if (event.action !== 'delete') {
       onGame(gameFromRecord(event.record))
