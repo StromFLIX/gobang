@@ -64,6 +64,7 @@ npm run test:e2e
 5. Configure the health check against `/health` through the public domain.
 
 TLS terminates at Coolify. Caddy handles internal same-origin routing and does not expose the PocketBase dashboard.
+Its configuration is baked into the Caddy image because Coolify deploys Compose files from an artifacts directory where repository-relative file mounts are not reliable.
 
 ## Accounts and recovery
 

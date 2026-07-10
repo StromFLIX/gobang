@@ -65,41 +65,41 @@ function randomize() {
     </div>
 
     <div class="feature-grid">
-      <label class="feature-field">
-        <span>Hair</span>
-        <select :value="config.hair" @change="updateFeature('hair', $event)">
+      <div class="feature-field">
+        <label for="avatar-hair">Hair</label>
+        <select id="avatar-hair" :value="config.hair" @change="updateFeature('hair', $event)">
           <option v-for="option in HAIR_OPTIONS" :key="option.value" :value="option.value">
             {{ option.label }}
           </option>
         </select>
-      </label>
+      </div>
 
-      <label class="feature-field">
-        <span>Expression</span>
-        <select :value="config.face" @change="updateFeature('face', $event)">
+      <div class="feature-field">
+        <label for="avatar-expression">Expression</label>
+        <select id="avatar-expression" :value="config.face" @change="updateFeature('face', $event)">
           <option v-for="option in FACE_OPTIONS" :key="option.value" :value="option.value">
             {{ option.label }}
           </option>
         </select>
-      </label>
+      </div>
 
-      <label class="feature-field">
-        <span>Glasses</span>
-        <select :value="config.accessory" @change="updateFeature('accessory', $event)">
+      <div class="feature-field">
+        <label for="avatar-glasses">Glasses</label>
+        <select id="avatar-glasses" :value="config.accessory" @change="updateFeature('accessory', $event)">
           <option v-for="option in ACCESSORY_OPTIONS" :key="option.value" :value="option.value">
             {{ option.label }}
           </option>
         </select>
-      </label>
+      </div>
 
-      <label class="feature-field">
-        <span>Facial hair</span>
-        <select :value="config.facialHair" @change="updateFeature('facialHair', $event)">
+      <div class="feature-field">
+        <label for="avatar-facial-hair">Facial hair</label>
+        <select id="avatar-facial-hair" :value="config.facialHair" @change="updateFeature('facialHair', $event)">
           <option v-for="option in FACIAL_HAIR_OPTIONS" :key="option.value" :value="option.value">
             {{ option.label }}
           </option>
         </select>
-      </label>
+      </div>
 
       <fieldset class="color-field">
         <legend>Skin</legend>
@@ -195,7 +195,7 @@ function randomize() {
   border: 0;
 }
 
-.feature-field span,
+.feature-field label,
 .color-field legend {
   display: block;
   margin-bottom: 0.25rem;

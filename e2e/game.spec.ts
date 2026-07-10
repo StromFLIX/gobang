@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test'
 
-async function configurePlayer(page: Page, name: string, avatar: string) {
+async function configurePlayer(page: Page, name: string, glasses: string) {
   await page.goto('/')
   await expect(page.getByText('Ready your player.')).toBeVisible()
   await page.locator('#player-name').fill(name)
-  await page.getByRole('radio', { name: `Choose avatar ${avatar}` }).click()
+  await page.getByLabel('Glasses').selectOption(glasses)
 }
 
 test('two private players receive realtime turn updates', async ({ browser }) => {
@@ -13,7 +13,7 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   const host = await hostContext.newPage()
   const guest = await guestContext.newPage()
 
-  await configurePlayer(host, 'Host player', 'nova')
+  await configurePlayer(host, 'Host player', 'glasses3')
   await host.getByRole('button', { name: 'New room' }).click()
   await expect(host).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
   await expect(host.getByText('Room is open')).toBeVisible()
@@ -21,7 +21,7 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   await guest.goto(host.url())
   await expect(guest.getByText('Choose your player.')).toBeVisible()
   await guest.locator('#join-player-name').fill('Guest player')
-  await guest.getByRole('radio', { name: 'Choose avatar fig' }).click()
+  await guest.getByLabel('Hair', { exact: true }).selectOption('bun')
   await guest.getByRole('button', { name: 'Join room' }).click()
 
   await expect(host.getByText('Guest player', { exact: true })).toBeVisible()
@@ -57,7 +57,7 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   })
   const page = await context.newPage()
 
-  await configurePlayer(page, 'Mobile player', 'pepper')
+  await configurePlayer(page, 'Mobile player', 'sunglasses')
   expect(await page.evaluate(() => navigator.maxTouchPoints)).toBeGreaterThan(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: 'test-results/mobile-lobby.png' })
@@ -80,7 +80,7 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
   await opponent.goto(page.url())
   await expect(opponent.getByText('Choose your player.')).toBeVisible()
   await opponent.locator('#join-player-name').fill('Mobile opponent')
-  await opponent.getByRole('radio', { name: 'Choose avatar maple' }).click()
+  await opponent.getByLabel('Facial hair').selectOption('moustache4')
   await opponent.getByRole('button', { name: 'Join room' }).click()
 
   const mobileFirstPoint = page.getByRole('gridcell', {
@@ -128,7 +128,7 @@ test('an upgraded guest can continue from another device', async ({ browser }) =
   const email = `player-${Date.now()}@example.com`
   const password = 'BrowserPass42!'
 
-  await configurePlayer(firstDevice, 'Cross-device player', 'pixel')
+  await configurePlayer(firstDevice, 'Cross-device player', 'glasses5')
   await firstDevice.getByRole('button', { name: 'New room' }).click()
   await expect(firstDevice.getByText('Room is open')).toBeVisible()
   const roomPath = new URL(firstDevice.url()).pathname
