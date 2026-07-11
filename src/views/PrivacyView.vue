@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ArrowLeft, Grid3X3 } from '@lucide/vue'
+import { ArrowLeft } from '@lucide/vue'
 import { RouterLink } from 'vue-router'
 
+import ComicBrand from '@/components/ComicBrand.vue'
 import LegalPostalAddress from '@/components/LegalPostalAddress.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import {
@@ -15,8 +16,7 @@ import {
   <div class="legal-shell">
     <header class="legal-header">
       <RouterLink to="/" class="brand-mark" aria-label="Gobang home">
-        <Grid3X3 :size="23" />
-        <strong>Gobang</strong>
+        <ComicBrand />
       </RouterLink>
       <RouterLink to="/" class="button button--quiet">
         <ArrowLeft :size="17" />

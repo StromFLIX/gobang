@@ -5,6 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import AvatarImage from '@/components/AvatarImage.vue'
 import AvatarPicker from '@/components/AvatarPicker.vue'
+import ComicBrand from '@/components/ComicBrand.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
@@ -184,7 +185,7 @@ async function confirmDeleteAccount() {
   <div class="account-page-shell">
     <header class="account-page-header">
       <RouterLink to="/" class="brand-mark" aria-label="Gobang home">
-        <strong>Gobang</strong>
+        <ComicBrand />
       </RouterLink>
       <RouterLink to="/" class="button button--quiet">
         <ArrowLeft :size="17" />

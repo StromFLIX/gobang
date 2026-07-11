@@ -22,6 +22,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
 import AvatarImage from '@/components/AvatarImage.vue'
+import ComicBrand from '@/components/ComicBrand.vue'
 import InvitationInbox from '@/components/InvitationInbox.vue'
 import LeaderboardPanel from '@/components/LeaderboardPanel.vue'
 import LobbyMatchReplay from '@/components/LobbyMatchReplay.vue'
@@ -456,7 +457,7 @@ function groupSummary(group: OpponentGameGroup) {
   <div class="app-shell">
     <header class="app-header">
       <RouterLink to="/" class="brand-mark" aria-label="Gobang home">
-        <strong>Gobang</strong>
+        <ComicBrand />
       </RouterLink>
 
       <div v-if="ready && player" class="account-summary">

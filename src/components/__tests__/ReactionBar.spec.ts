@@ -23,12 +23,23 @@ describe('ReactionBar', () => {
     })
 
     expect(wrapper.findAll('.reaction-button')).toHaveLength(7)
-    await wrapper.get('button[aria-label="Send Shit"]').trigger('click')
+    expect(wrapper.get('.reaction-button--heart').attributes('aria-label')).toBe('Send Heart')
+    expect(wrapper.findAll('.reaction-button .comic-reaction')).toHaveLength(7)
+    expect(wrapper.find('.reaction-button img').exists()).toBe(false)
+    expect(
+      wrapper
+        .findAll('.reaction-button .comic-reaction')
+        .map((reaction) => reaction.attributes('data-reaction-art')),
+    ).toEqual(['wow', 'plus_one', 'poop', 'mind_blown', 'facepalm', 'heart', 'gg'])
+    expect(wrapper.get('.reaction-button .comic-reaction--heart').classes()).toContain(
+      'comic-reaction--still',
+    )
+    await wrapper.get('button[aria-label="Send Poop"]').trigger('click')
     expect(wrapper.emitted('send')).toEqual([['poop']])
 
     await wrapper.setProps({ incoming, incomingName: 'Felix' })
-    expect(wrapper.get('.reaction-popup img[data-reaction="poop"]').attributes('src')).toMatch(
-      /^data:image\/svg\+xml/,
+    expect(wrapper.get('.reaction-popup svg[data-reaction="poop"] .reaction-poop').exists()).toBe(
+      true,
     )
     expect(wrapper.get('.reaction-popup').text()).toContain('Felix sent')
 

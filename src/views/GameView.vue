@@ -20,6 +20,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import AvatarImage from '@/components/AvatarImage.vue'
 import AvatarPicker from '@/components/AvatarPicker.vue'
+import ComicBrand from '@/components/ComicBrand.vue'
 import GridComponent from '@/components/GridComponent.vue'
 import InvitationInbox from '@/components/InvitationInbox.vue'
 import ReactionBar from '@/components/ReactionBar.vue'
@@ -464,7 +465,7 @@ function stoneFor(playerId: string): Stone | null {
         title="Back to lobby"
       >
         <ChevronLeft :size="20" />
-        <strong>Gobang</strong>
+        <ComicBrand />
       </RouterLink>
       <div class="game-header__actions">
         <InvitationInbox

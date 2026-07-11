@@ -1,12 +1,7 @@
 <script setup lang="ts">
-import facepalmAsset from '@twemoji/svg/1f926.svg?url'
-import heartAsset from '@twemoji/svg/2764.svg?url'
-import mindBlownAsset from '@twemoji/svg/1f92f.svg?url'
-import plusOneAsset from '@twemoji/svg/1f44d.svg?url'
-import poopAsset from '@twemoji/svg/1f4a9.svg?url'
-import wowAsset from '@twemoji/svg/1f62e.svg?url'
 import { Send } from '@lucide/vue'
 
+import ComicReaction from '@/components/ComicReaction.vue'
 import type { GameReaction, ReactionKind } from '@/types/game'
 
 withDefaults(
@@ -21,19 +16,15 @@ withDefaults(
 
 defineEmits<{ send: [kind: ReactionKind] }>()
 
-const reactions: { kind: ReactionKind; asset: string; label: string }[] = [
-  { kind: 'wow', asset: wowAsset, label: 'Wow' },
-  { kind: 'plus_one', asset: plusOneAsset, label: '+1' },
-  { kind: 'poop', asset: poopAsset, label: 'Shit' },
-  { kind: 'mind_blown', asset: mindBlownAsset, label: 'Mind blown' },
-  { kind: 'facepalm', asset: facepalmAsset, label: 'Facepalm' },
-  { kind: 'heart', asset: heartAsset, label: 'Heart' },
-  { kind: 'gg', asset: '', label: 'Good game' },
+const reactions: { kind: ReactionKind; label: string }[] = [
+  { kind: 'wow', label: 'Wow' },
+  { kind: 'plus_one', label: '+1' },
+  { kind: 'poop', label: 'Poop' },
+  { kind: 'mind_blown', label: 'Mind blown' },
+  { kind: 'facepalm', label: 'Facepalm' },
+  { kind: 'heart', label: 'Heart' },
+  { kind: 'gg', label: 'Good game' },
 ]
-
-function assetFor(kind: ReactionKind) {
-  return reactions.find((reaction) => reaction.kind === kind)?.asset ?? ''
-}
 </script>
 
 <template>
@@ -45,13 +36,7 @@ function assetFor(kind: ReactionKind) {
       role="status"
       :aria-label="`${incomingName} reacted ${incoming.kind}`"
     >
-      <img
-        v-if="assetFor(incoming.kind)"
-        :src="assetFor(incoming.kind)"
-        :data-reaction="incoming.kind"
-        alt=""
-      />
-      <strong v-else>GG</strong>
+      <ComicReaction :kind="incoming.kind" :data-reaction="incoming.kind" />
       <small>{{ incomingMine ? 'Sent by you' : `${incomingName} sent` }}</small>
     </div>
 
@@ -61,14 +46,13 @@ function assetFor(kind: ReactionKind) {
       v-for="reaction in reactions"
       :key="reaction.kind"
       type="button"
-      class="reaction-button"
+      :class="['reaction-button', `reaction-button--${reaction.kind.replace('_', '-')}`]"
       :disabled="disabled"
       :title="`Send ${reaction.label}`"
       :aria-label="`Send ${reaction.label}`"
       @click="$emit('send', reaction.kind)"
     >
-      <img v-if="reaction.asset" :src="reaction.asset" alt="" />
-      <span v-else>GG</span>
+      <ComicReaction :kind="reaction.kind" :animated="false" />
     </button>
   </div>
 </template>
@@ -78,12 +62,12 @@ function assetFor(kind: ReactionKind) {
   position: relative;
   display: grid;
   width: 100%;
-  min-height: 2.8rem;
+  min-height: 4.5rem;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.3rem;
+  gap: 0.35rem;
   align-items: center;
   margin-top: 0.55rem;
-  padding: 0.25rem;
+  padding: 0.3rem;
   overflow: visible;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -105,35 +89,75 @@ function assetFor(kind: ReactionKind) {
 }
 
 .reaction-button {
+  --reaction-button-bg: #f1f5f2;
+  --reaction-button-hover: #e7eee9;
+
   display: grid;
   width: 100%;
   min-width: 0;
-  height: 2.25rem;
+  height: 2.9rem;
   place-items: center;
   padding: 0;
-  border: 0;
+  border: 1px solid rgba(23, 34, 28, 0.16);
   border-radius: 6px;
-  background: transparent;
+  background: var(--reaction-button-bg);
+  box-shadow: 0 1px 0 rgba(23, 34, 28, 0.12);
   font-family: inherit;
   font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
 }
 
-.reaction-button:last-child {
-  color: var(--color-green-dark);
-  font-size: 0.72rem;
-  font-weight: 900;
+.reaction-button--wow {
+  --reaction-button-bg: #fff4c7;
+  --reaction-button-hover: #ffe997;
 }
 
-.reaction-button img {
-  width: 1.35rem;
-  height: 1.35rem;
+.reaction-button--plus-one {
+  --reaction-button-bg: #def4fa;
+  --reaction-button-hover: #c4eaf4;
+}
+
+.reaction-button--poop {
+  --reaction-button-bg: #f3e2d5;
+  --reaction-button-hover: #e9cfbd;
+}
+
+.reaction-button--mind-blown {
+  --reaction-button-bg: #ffe0d6;
+  --reaction-button-hover: #ffc9b8;
+}
+
+.reaction-button--facepalm {
+  --reaction-button-bg: #f5e6dc;
+  --reaction-button-hover: #ead1c2;
+}
+
+.reaction-button--heart {
+  --reaction-button-bg: #ffe3e8;
+  --reaction-button-hover: #ffcbd5;
+}
+
+.reaction-button--gg {
+  --reaction-button-bg: #e1f2e7;
+  --reaction-button-hover: #c9e7d4;
+}
+
+.reaction-button .comic-reaction {
+  width: 2.65rem;
+  height: 2.65rem;
 }
 
 .reaction-button:hover:not(:disabled),
 .reaction-button:focus-visible {
-  background: var(--color-surface-muted);
+  border-color: rgba(23, 34, 28, 0.34);
+  background: var(--reaction-button-hover);
+  box-shadow: 0 3px 8px rgba(23, 34, 28, 0.14);
   transform: translateY(-1px);
 }
 
@@ -154,9 +178,9 @@ function assetFor(kind: ReactionKind) {
   bottom: calc(100% + 0.5rem);
   left: 50%;
   display: grid;
-  min-width: 5rem;
+  min-width: 7rem;
   justify-items: center;
-  padding: 0.65rem 0.85rem 0.5rem;
+  padding: 0.75rem 1rem 0.6rem;
   border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: 8px;
   background: rgba(29, 37, 32, 0.92);
@@ -165,18 +189,9 @@ function assetFor(kind: ReactionKind) {
   animation: reaction-rise 2.6s ease-out both;
 }
 
-.reaction-popup strong,
-.reaction-popup img {
-  width: 2.15rem;
-  height: 2.15rem;
-}
-
-.reaction-popup strong {
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font-size: 0.8rem;
-  line-height: 1;
+.reaction-popup .comic-reaction {
+  width: 5.25rem;
+  height: 5.25rem;
 }
 
 .reaction-popup small {
@@ -219,10 +234,10 @@ function assetFor(kind: ReactionKind) {
 
 @media (max-width: 430px) {
   .reaction-bar {
-    min-height: 3.75rem;
-    gap: 0.1rem;
+    min-height: 4.25rem;
+    gap: 0.2rem;
     margin-top: 0.35rem;
-    padding: 0.15rem;
+    padding: 0.25rem;
   }
 
   .reaction-bar__label {
@@ -231,12 +246,27 @@ function assetFor(kind: ReactionKind) {
   }
 
   .reaction-button {
-    height: 2.1rem;
+    height: 2.8rem;
   }
 
-  .reaction-button img {
-    width: 1.2rem;
-    height: 1.2rem;
+  .reaction-button .comic-reaction {
+    width: 2.4rem;
+    height: 2.4rem;
+  }
+}
+
+@media (max-width: 339px) {
+  .reaction-bar {
+    gap: 0.15rem;
+  }
+
+  .reaction-button {
+    height: 2.65rem;
+  }
+
+  .reaction-button .comic-reaction {
+    width: 2.15rem;
+    height: 2.15rem;
   }
 }
 

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ArrowLeft, Check, Grid3X3, Trash2 } from '@lucide/vue'
+import { ArrowLeft, Check, Trash2 } from '@lucide/vue'
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import ComicBrand from '@/components/ComicBrand.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import { useSession } from '@/composables/useSession'
 import { ApiError } from '@/services/api'
@@ -37,8 +38,7 @@ async function submit() {
   <div class="deletion-shell">
     <header class="deletion-header">
       <RouterLink to="/" class="brand-mark" aria-label="Gobang home">
-        <Grid3X3 :size="23" />
-        <strong>Gobang</strong>
+        <ComicBrand />
       </RouterLink>
       <RouterLink to="/" class="button button--quiet">
         <ArrowLeft :size="17" />
