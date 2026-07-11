@@ -4,7 +4,7 @@ ARG PB_VERSION=0.39.6
 ARG TARGETARCH
 
 RUN apk add --no-cache ca-certificates unzip wget \
-    && wget -q \
+    && wget --tries=3 --timeout=30 \
         "https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_linux_${TARGETARCH}.zip" \
         -O /tmp/pocketbase.zip \
     && unzip /tmp/pocketbase.zip -d /pb \
