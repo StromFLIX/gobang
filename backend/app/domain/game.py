@@ -63,6 +63,8 @@ class Game:
     round_results: list[RoundResult] = field(default_factory=list)
     hidden_by_ids: tuple[str, ...] = ()
     updated_at: datetime | None = None
+    turn_started_at: datetime | None = None
+    turn_reminder_sent: bool = False
 
     def player_ids(self) -> tuple[str, ...]:
         if self.guest is None:

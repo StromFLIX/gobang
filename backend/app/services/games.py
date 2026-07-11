@@ -12,6 +12,8 @@ from app.domain.rules import MoveError, Stone, apply_move, empty_board
 INITIAL_ELO = 1200.0
 ELO_K_FACTOR = 32
 WAITING_GAME_TTL = timedelta(hours=24)
+TURN_REMINDER_AFTER = timedelta(hours=12)
+TURN_TIMEOUT = timedelta(hours=24)
 
 
 class GameServiceError(Exception):
@@ -88,6 +90,18 @@ class PlayerMerge:
     skipped_games: int
 
 
+@dataclass(frozen=True, slots=True)
+class JoinResult:
+    game: Game
+    joined: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TurnReminder:
+    game: Game
+    player: Player
+
+
 class GameRepository(Protocol):
     async def create(self, game: Game) -> Game: ...
 
@@ -139,6 +153,7 @@ class GameService:
                 guest=guest,
                 status=GameStatus.ACTIVE,
                 revision=1,
+                turn_started_at=self._now(),
             )
             if self._choose_host_black():
                 game.black_player_id = host.id
@@ -153,6 +168,9 @@ class GameService:
         raise GameConflict("Could not allocate a unique invite code")
 
     async def join(self, invite_code: str, player: Player) -> Game:
+        return (await self.join_with_result(invite_code, player)).game
+
+    async def join_with_result(self, invite_code: str, player: Player) -> JoinResult:
         async with self._lock(f"invite:{invite_code}"):
             game = await self._repository.get_by_invite(invite_code)
             if game is None or game.status is GameStatus.CANCELLED:
@@ -161,7 +179,7 @@ class GameService:
                 await self._set_status(game, GameStatus.CANCELLED)
                 raise GameNotFound("Game not found")
             if player.id in game.player_ids():
-                return game
+                return JoinResult(game=game, joined=False)
             if game.status is not GameStatus.WAITING or game.guest is not None:
                 raise GameNotFound("Game not found")
 
@@ -174,8 +192,13 @@ class GameService:
                 game.black_player_id = player.id
                 game.white_player_id = game.host.id
             game.status = GameStatus.ACTIVE
+            game.turn_started_at = self._now()
+            game.turn_reminder_sent = False
             game.revision += 1
-            return await self._repository.update(game, expected_revision)
+            return JoinResult(
+                game=await self._repository.update(game, expected_revision),
+                joined=True,
+            )
 
     async def get(self, game_id: str, player_id: str) -> Game:
         game = await self._repository.get_by_id(game_id)
@@ -201,6 +224,16 @@ class GameService:
         for game in await self._repository.list_all():
             if self._waiting_game_expired(game):
                 await self._expire_waiting_game(game.id)
+
+    async def process_turn_deadlines(self) -> Sequence[TurnReminder]:
+        reminders: list[TurnReminder] = []
+        for game in await self._repository.list_all():
+            if game.status is not GameStatus.ACTIVE:
+                continue
+            reminder = await self._process_turn_deadline(game.id)
+            if reminder:
+                reminders.append(reminder)
+        return reminders
 
     async def leaderboard(self, player: Player) -> Leaderboard:
         games = await self._repository.list_all()
@@ -419,6 +452,15 @@ class GameService:
                 raise GameConflict("Game state changed; refresh and try again")
             if game.status is not GameStatus.ACTIVE:
                 raise GameInvalidAction("Game is not active")
+            if self._turn_expired(game):
+                previous_revision = game.revision
+                timed_out_player_id = game.player_for(game.turn)
+                if timed_out_player_id is None:
+                    raise GameInvalidAction("The current turn has no player")
+                self._apply_resignation(game, timed_out_player_id)
+                game.revision += 1
+                await self._repository.update(game, previous_revision)
+                raise GameInvalidAction("Your turn expired after 24 hours")
             if game.player_for(game.turn) != player_id:
                 raise GameForbidden("It is not your turn")
             if game.moves and position in game.moves[-1].captured:
@@ -455,6 +497,8 @@ class GameService:
                 self._record_result(game)
             else:
                 game.turn = moving_stone.opponent
+                game.turn_started_at = self._now()
+                game.turn_reminder_sent = False
             game.revision += 1
             return await self._repository.update(game, previous_revision)
 
@@ -527,6 +571,8 @@ class GameService:
                 game.resigned_by_id = None
                 game.host_rematch = False
                 game.guest_rematch = False
+                game.turn_started_at = self._now()
+                game.turn_reminder_sent = False
                 game.round += 1
             game.revision += 1
             return await self._repository.update(game, previous_revision)
@@ -554,12 +600,46 @@ class GameService:
                 return True
             return False
 
+    async def _process_turn_deadline(self, game_id: str) -> TurnReminder | None:
+        async with self._lock(game_id):
+            game = await self._repository.get_by_id(game_id)
+            if game is None or game.status is not GameStatus.ACTIVE:
+                return None
+            turn_started_at = self._turn_started_at(game)
+            player_id = game.player_for(game.turn)
+            if turn_started_at is None or player_id is None:
+                return None
+
+            previous_revision = game.revision
+            if turn_started_at <= self._now() - TURN_TIMEOUT:
+                self._apply_resignation(game, player_id)
+                game.revision += 1
+                await self._repository.update(game, previous_revision)
+                return None
+            if game.turn_reminder_sent or turn_started_at > self._now() - TURN_REMINDER_AFTER:
+                return None
+
+            game.turn_started_at = turn_started_at
+            game.turn_reminder_sent = True
+            game.revision += 1
+            updated = await self._repository.update(game, previous_revision)
+            player = updated.host if updated.host.id == player_id else updated.guest
+            return TurnReminder(game=updated, player=player) if player else None
+
     def _waiting_game_expired(self, game: Game) -> bool:
         return (
             game.status is GameStatus.WAITING
             and game.updated_at is not None
             and game.updated_at <= self._now() - WAITING_GAME_TTL
         )
+
+    def _turn_expired(self, game: Game) -> bool:
+        turn_started_at = self._turn_started_at(game)
+        return turn_started_at is not None and turn_started_at <= self._now() - TURN_TIMEOUT
+
+    @staticmethod
+    def _turn_started_at(game: Game) -> datetime | None:
+        return game.turn_started_at or game.updated_at
 
     def _apply_resignation(self, game: Game, player_id: str) -> None:
         winner_id = game.opponent_of(player_id)

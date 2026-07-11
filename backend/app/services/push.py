@@ -91,6 +91,18 @@ class PushNotificationService:
             ),
         )
 
+    async def game_joined(self, game: Game, player: Player) -> None:
+        if game.host.id == player.id or game.guest is None or game.guest.id != player.id:
+            return
+        await self._deliver(
+            game.host.id,
+            PushMessage(
+                title="Your opponent joined",
+                body=f"{player.display_name} joined your Gobang game.",
+                data={"kind": "join", "path": f"/game/{game.invite_code}"},
+            ),
+        )
+
     async def rematch_requested(self, game: Game, player: Player) -> None:
         if game.status not in {GameStatus.WON, GameStatus.DRAW, GameStatus.RESIGNED}:
             return
@@ -103,6 +115,16 @@ class PushNotificationService:
                 title="Rematch requested",
                 body=f"{player.display_name} wants another round.",
                 data={"kind": "rematch", "path": f"/game/{game.invite_code}"},
+            ),
+        )
+
+    async def turn_reminder(self, game: Game, player: Player) -> None:
+        await self._deliver(
+            player.id,
+            PushMessage(
+                title="Your Gobang turn is waiting",
+                body="You have 12 hours left to move before you automatically resign.",
+                data={"kind": "turn_reminder", "path": f"/game/{game.invite_code}"},
             ),
         )
 

@@ -96,17 +96,20 @@ def create_app(
             game_service,
         )
         app.state.presence_service = PresenceService(game_service)
-        app.state.push_service = PushNotificationService(
+        push_service = PushNotificationService(
             push_repository or PocketBasePushDeviceRepository(client),
             push_gateway or FirebasePushGateway(resolved_settings.firebase_credentials_json),
         )
-        stale_game_task = asyncio.create_task(close_stale_games(game_service))
+        app.state.push_service = push_service
+        game_maintenance_task = asyncio.create_task(
+            maintain_games(game_service, push_service)
+        )
         try:
             yield
         finally:
-            stale_game_task.cancel()
+            game_maintenance_task.cancel()
             with suppress(asyncio.CancelledError):
-                await stale_game_task
+                await game_maintenance_task
         if owns_pocketbase:
             await client.close()
 
@@ -208,10 +211,17 @@ def add_spa_routes(application: FastAPI, frontend_dist: Path) -> None:
 app = create_app()
 
 
-async def close_stale_games(game_service: GameService) -> None:
+async def maintain_games(
+    game_service: GameService, push_service: PushNotificationService
+) -> None:
     while True:
         try:
             await game_service.expire_stale_waiting_games()
         except Exception:
             logger.exception("Could not close stale waiting games")
-        await asyncio.sleep(60 * 60)
+        try:
+            for reminder in await game_service.process_turn_deadlines():
+                await push_service.turn_reminder(reminder.game, reminder.player)
+        except Exception:
+            logger.exception("Could not process game turn deadlines")
+        await asyncio.sleep(5 * 60)

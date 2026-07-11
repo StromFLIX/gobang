@@ -128,6 +128,8 @@ def game_to_record(game: Game) -> dict[str, Any]:
             for result in game.round_results
         ],
         "hidden_by": list(game.hidden_by_ids),
+        "turn_started_at": game.turn_started_at.isoformat() if game.turn_started_at else "",
+        "turn_reminder_sent": game.turn_reminder_sent,
     }
 
 
@@ -172,6 +174,12 @@ def game_from_record(record: dict[str, Any]) -> Game:
         ],
         hidden_by_ids=tuple(str(player_id) for player_id in record.get("hidden_by") or []),
         updated_at=datetime.fromisoformat(record["updated"]) if record.get("updated") else None,
+        turn_started_at=(
+            datetime.fromisoformat(record["turn_started_at"])
+            if record.get("turn_started_at")
+            else None
+        ),
+        turn_reminder_sent=bool(record.get("turn_reminder_sent")),
     )
 
 

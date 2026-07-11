@@ -84,6 +84,7 @@ async def test_game_events_send_expected_push_routes_and_remove_invalid_tokens()
     repository = MemoryPushRepository()
     gateway = RecordingGateway()
     service = PushNotificationService(repository, gateway)
+    await service.register(ACCOUNT, "account-token", DevicePlatform.ANDROID)
     await service.register(RIVAL, "rival-token", DevicePlatform.ANDROID)
 
     invitation = Invitation(
@@ -103,16 +104,30 @@ async def test_game_events_send_expected_push_routes_and_remove_invalid_tokens()
     )
 
     await service.invitation_sent(invitation)
+    await service.game_joined(game, RIVAL)
+    await service.turn_reminder(game, ACCOUNT)
     await service.game_moved(game, ACCOUNT)
     await service.rematch_requested(replace(game, status=GameStatus.WON), ACCOUNT)
 
     assert [message["data"] for message in gateway.messages] == [
         {"kind": "invitation", "path": "/"},
+        {"kind": "join", "path": "/game/invite-code"},
+        {"kind": "turn_reminder", "path": "/game/invite-code"},
         {"kind": "move", "path": "/game/invite-code"},
         {"kind": "rematch", "path": "/game/invite-code"},
     ]
-    assert all(message["tokens"] == ["rival-token"] for message in gateway.messages)
+    assert [message["tokens"] for message in gateway.messages] == [
+        ["rival-token"],
+        ["account-token"],
+        ["account-token"],
+        ["rival-token"],
+        ["rival-token"],
+    ]
+    assert gateway.messages[2]["title"] == "Your Gobang turn is waiting"
+    assert gateway.messages[2]["body"] == (
+        "You have 12 hours left to move before you automatically resign."
+    )
 
     gateway.invalid_tokens = ("rival-token",)
     await service.game_moved(game, ACCOUNT)
-    assert repository.devices == {}
+    assert set(repository.devices) == {"account-token"}

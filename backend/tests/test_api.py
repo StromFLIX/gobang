@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -149,6 +149,26 @@ class MemoryPushRepository:
             self.devices.pop(token, None)
 
 
+class RecordingPushGateway:
+    enabled = True
+
+    def __init__(self) -> None:
+        self.messages: list[dict[str, object]] = []
+
+    async def send(
+        self,
+        tokens: Sequence[str],
+        *,
+        title: str,
+        body: str,
+        data: Mapping[str, str],
+    ) -> Sequence[str]:
+        self.messages.append(
+            {"tokens": list(tokens), "title": title, "body": body, "data": dict(data)}
+        )
+        return ()
+
+
 class FakePocketBase:
     def __init__(self) -> None:
         self.verification_requests: list[str] = []
@@ -223,6 +243,7 @@ def make_client(
     reaction_repository: MemoryReactionRepository | None = None,
     matchmaking_repository: MemoryMatchmakingRepository | None = None,
     push_repository: MemoryPushRepository | None = None,
+    push_gateway: RecordingPushGateway | None = None,
     settings: Settings | None = None,
     pocketbase: FakePocketBase | None = None,
 ) -> TestClient:
@@ -239,6 +260,7 @@ def make_client(
         reaction_repository=reaction_repository or MemoryReactionRepository(),
         matchmaking_repository=(matchmaking_repository or MemoryMatchmakingRepository()),
         push_repository=push_repository,
+        push_gateway=push_gateway,
     )
     return TestClient(app)
 
@@ -471,6 +493,43 @@ def test_registered_android_device_can_enable_push_notifications() -> None:
         )
         assert removed.status_code == 204
         assert repository.devices == {}
+
+
+def test_joining_shared_game_notifies_host_once() -> None:
+    repository = MemoryPushRepository()
+    gateway = RecordingPushGateway()
+    with make_client(push_repository=repository, push_gateway=gateway) as client:
+        register = client.put(
+            "/api/push/devices",
+            headers={"Authorization": "Bearer account-token"},
+            json={"token": "account-device", "platform": "android"},
+        )
+        assert register.status_code == 204
+        created = client.post(
+            "/api/games", headers={"Authorization": "Bearer account-token"}
+        ).json()
+
+        first_join = client.post(
+            "/api/games/join",
+            headers={"Authorization": "Bearer rival-token"},
+            json={"invite_code": created["invite_code"]},
+        )
+        repeated_join = client.post(
+            "/api/games/join",
+            headers={"Authorization": "Bearer rival-token"},
+            json={"invite_code": created["invite_code"]},
+        )
+
+    assert first_join.status_code == 200
+    assert repeated_join.status_code == 200
+    assert gateway.messages == [
+        {
+            "tokens": ["account-device"],
+            "title": "Your opponent joined",
+            "body": "Rival joined your Gobang game.",
+            "data": {"kind": "join", "path": f"/game/{created['invite_code']}"},
+        }
+    ]
 
 
 def test_guest_progress_can_be_merged_while_signing_in() -> None:

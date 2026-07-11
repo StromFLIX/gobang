@@ -21,9 +21,16 @@ async def create_game(player: CurrentPlayer, service: GameServiceDependency) -> 
 
 @router.post("/join", response_model=GameResponse)
 async def join_game(
-    body: JoinRequest, player: CurrentPlayer, service: GameServiceDependency
+    body: JoinRequest,
+    background_tasks: BackgroundTasks,
+    player: CurrentPlayer,
+    service: GameServiceDependency,
+    push: PushServiceDependency,
 ) -> GameResponse:
-    return GameResponse.from_domain(await service.join(body.invite_code, player))
+    result = await service.join_with_result(body.invite_code, player)
+    if result.joined:
+        background_tasks.add_task(push.game_joined, result.game, player)
+    return GameResponse.from_domain(result.game)
 
 
 @router.get("/invite/{invite_code}", response_model=GameResponse)

@@ -88,6 +88,8 @@ async def test_create_and_join_assigns_sides(service: GameService) -> None:
     assert joined.black_player_id == HOST.id
     assert joined.white_player_id == GUEST.id
     assert joined.turn is Stone.BLACK
+    assert joined.turn_started_at == COMPLETED_AT
+    assert joined.turn_reminder_sent is False
     assert joined.revision == 1
 
 
@@ -100,6 +102,7 @@ async def test_create_between_starts_an_accepted_challenge(service: GameService)
     assert game.guest == GUEST
     assert game.black_player_id == HOST.id
     assert game.white_player_id == GUEST.id
+    assert game.turn_started_at == COMPLETED_AT
     assert game.revision == 1
 
 
@@ -107,7 +110,9 @@ async def test_create_between_starts_an_accepted_challenge(service: GameService)
 async def test_join_is_idempotent_and_hides_full_room(service: GameService) -> None:
     game = await active_game(service)
 
-    assert (await service.join(game.invite_code, GUEST)).id == game.id
+    repeated = await service.join_with_result(game.invite_code, GUEST)
+    assert repeated.game.id == game.id
+    assert repeated.joined is False
     with pytest.raises(GameNotFound):
         await service.join(game.invite_code, THIRD)
 
@@ -123,13 +128,20 @@ async def test_rejects_third_party_and_out_of_turn_moves(service: GameService) -
 
 
 @pytest.mark.asyncio
-async def test_move_updates_turn_and_revision(service: GameService) -> None:
+async def test_move_updates_turn_and_revision(
+    service: GameService, repository: MemoryRepository
+) -> None:
     game = await active_game(service)
+    game.turn_started_at = COMPLETED_AT - timedelta(hours=13)
+    game.turn_reminder_sent = True
+    repository.games[game.id] = deepcopy(game)
 
     moved = await service.move(game.id, HOST.id, 0, game.revision)
 
     assert moved.board[0] is Stone.BLACK
     assert moved.turn is Stone.WHITE
+    assert moved.turn_started_at == COMPLETED_AT
+    assert moved.turn_reminder_sent is False
     assert moved.revision == 2
 
 
@@ -237,6 +249,56 @@ async def test_waiting_game_expires_after_24_hours(
     assert repository.games[game.id].status is GameStatus.CANCELLED
     with pytest.raises(GameNotFound):
         await service.join(game.invite_code, GUEST)
+
+
+@pytest.mark.asyncio
+async def test_turn_reminder_is_persisted_once_after_12_hours(
+    service: GameService, repository: MemoryRepository
+) -> None:
+    game = await active_game(service)
+    repository.games[game.id].turn_started_at = COMPLETED_AT - timedelta(hours=12)
+
+    reminders = await service.process_turn_deadlines()
+    repeated = await service.process_turn_deadlines()
+
+    assert len(reminders) == 1
+    assert reminders[0].game.id == game.id
+    assert reminders[0].player == HOST
+    assert repository.games[game.id].turn_reminder_sent is True
+    assert repository.games[game.id].turn_started_at == COMPLETED_AT - timedelta(hours=12)
+    assert repeated == []
+
+
+@pytest.mark.asyncio
+async def test_turn_timeout_resigns_current_player_after_24_hours(
+    service: GameService, repository: MemoryRepository
+) -> None:
+    game = await active_game(service)
+    repository.games[game.id].turn_started_at = COMPLETED_AT - timedelta(hours=24)
+
+    reminders = await service.process_turn_deadlines()
+
+    timed_out = repository.games[game.id]
+    assert reminders == []
+    assert timed_out.status is GameStatus.RESIGNED
+    assert timed_out.resigned_by_id == HOST.id
+    assert timed_out.winner_player_id == GUEST.id
+    assert timed_out.guest_score == 1
+    assert timed_out.round_results[-1].completed_at == COMPLETED_AT
+
+
+@pytest.mark.asyncio
+async def test_move_at_expired_deadline_records_resignation(
+    service: GameService, repository: MemoryRepository
+) -> None:
+    game = await active_game(service)
+    repository.games[game.id].turn_started_at = COMPLETED_AT - timedelta(hours=24)
+
+    with pytest.raises(GameInvalidAction, match="expired after 24 hours"):
+        await service.move(game.id, HOST.id, 0, game.revision)
+
+    assert repository.games[game.id].status is GameStatus.RESIGNED
+    assert repository.games[game.id].resigned_by_id == HOST.id
 
 
 @pytest.mark.asyncio
