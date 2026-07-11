@@ -10,6 +10,7 @@
     "android:sync": "npm run build:android:web && cap sync android",
     "android:open": "cap open android",
     "android:build": "npm run android:sync && ./android/gradlew -p android assembleDebug",
+    "android:release": "npm run android:sync && ./android/gradlew -p android assembleRelease",
     "android:bundle": "npm run android:sync && ./android/gradlew -p android bundleRelease",
     "preview": "vite preview",
     "build-only": "vite build",

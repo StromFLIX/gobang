@@ -63,6 +63,33 @@ npm run android:build
 
 The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. Use `npm run android:open` to open the project in Android Studio. `npm run android:bundle` creates a release app bundle after release signing is configured in Gradle.
 
+### Automated Android releases
+
+`.github/workflows/android-release.yml` builds and signs an APK after every push to `main`. It also supports manual runs from the GitHub Actions page. Each successful run replaces the APK attached to the rolling `android-latest` release and retains a run-specific workflow artifact for 30 days.
+
+Create the release keystore once and keep a secure offline backup. Android updates must always use the same signing key; losing it prevents future APKs from updating existing installations.
+
+```sh
+keytool -genkeypair \
+	-keystore gobang-release.jks \
+	-alias gobang \
+	-keyalg RSA \
+	-keysize 4096 \
+	-validity 10000
+```
+
+Open the GitHub repository, then go to **Settings → Secrets and variables → Actions → Secrets** and create these repository secrets:
+
+- `GOOGLE_SERVICES_JSON_BASE64`: output of `base64 -w0 android/app/google-services.json`
+- `ANDROID_KEYSTORE_BASE64`: output of `base64 -w0 gobang-release.jks`
+- `ANDROID_KEYSTORE_PASSWORD`: the keystore password
+- `ANDROID_KEY_ALIAS`: `gobang`, or the alias used when creating the key
+- `ANDROID_KEY_PASSWORD`: the private-key password
+
+Under **Settings → Secrets and variables → Actions → Variables**, optionally set `ANDROID_API_BASE_URL`. It defaults to `https://gobang.stromflix.com` when omitted. Under **Settings → Actions → General → Workflow permissions**, allow **Read and write permissions** so the workflow can move the `android-latest` tag and update its GitHub Release. If the repository has tag rulesets, allow GitHub Actions to update `android-latest`.
+
+Do not add the Firebase backend service-account key to GitHub Actions. `FIREBASE_CREDENTIALS_JSON` belongs only in the deployed backend environment. The APK build needs the Android `google-services.json`, not the Admin SDK private key.
+
 Push notifications use Firebase Cloud Messaging:
 
 1. Create a Firebase Android app with package ID `com.stromflix.gobang`.
