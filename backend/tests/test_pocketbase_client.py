@@ -7,6 +7,45 @@ from app.domain.game import Player
 
 
 @pytest.mark.asyncio
+async def test_admin_request_reauthenticates_after_forbidden_stale_token() -> None:
+    admin_tokens = iter(["stale-admin-token", "fresh-admin-token"])
+    authorization_headers: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/collections/_superusers/auth-with-password":
+            return httpx.Response(200, json={"token": next(admin_tokens)})
+        if request.url.path == "/api/collections/players/records/player-id":
+            authorization_headers.append(request.headers["Authorization"])
+            if request.headers["Authorization"] == "stale-admin-token":
+                return httpx.Response(
+                    403,
+                    json={"message": "Only superusers can perform this action."},
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "id": "player-id",
+                    "display_name": "Updated player",
+                    "avatar_seed": "updated-player",
+                    "is_guest": True,
+                },
+            )
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    http_client = httpx.AsyncClient(
+        base_url="http://pocketbase.test",
+        transport=httpx.MockTransport(handle),
+    )
+    client = PocketBaseClient(Settings(), http_client)
+
+    player = await client.update_profile("player-id", "Updated player", "updated-player")
+    await http_client.aclose()
+
+    assert player.display_name == "Updated player"
+    assert authorization_headers == ["stale-admin-token", "fresh-admin-token"]
+
+
+@pytest.mark.asyncio
 async def test_verification_uses_pocketbase_auth_endpoints() -> None:
     requests: list[httpx.Request] = []
 
@@ -47,9 +86,7 @@ async def test_promote_google_guest_requires_linked_google_auth() -> None:
         if request.url.path == "/api/collections/_superusers/auth-with-password":
             return httpx.Response(200, json={"token": "admin-token"})
         if request.url.path == "/api/collections/_externalAuths/records":
-            assert request.url.params["filter"] == (
-                'recordRef = "guest-id" && provider = "google"'
-            )
+            assert request.url.params["filter"] == ('recordRef = "guest-id" && provider = "google"')
             return httpx.Response(200, json={"items": [{"provider": "google"}]})
         if request.url.path == "/api/collections/players/records/guest-id":
             assert request.method == "PATCH"
@@ -127,9 +164,7 @@ async def test_delete_account_reauthenticates_and_removes_games_before_player() 
             return httpx.Response(204)
         if request.url.path == "/api/collections/games/records":
             assert request.url.params["page"] == "1"
-            assert request.url.params["filter"] == (
-                'host = "player-id" || guest = "player-id"'
-            )
+            assert request.url.params["filter"] == ('host = "player-id" || guest = "player-id"')
             game_pages += 1
             items = [{"id": "game-1"}, {"id": "game-2"}] if game_pages == 1 else []
             return httpx.Response(200, json={"items": items})

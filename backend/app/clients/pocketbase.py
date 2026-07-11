@@ -129,9 +129,7 @@ class PocketBaseClient:
         )
         return await self.login(email, password)
 
-    async def update_profile(
-        self, player_id: str, display_name: str, avatar_seed: str
-    ) -> Player:
+    async def update_profile(self, player_id: str, display_name: str, avatar_seed: str) -> Player:
         record = await self.admin_request(
             "PATCH",
             f"/api/collections/players/records/{player_id}",
@@ -139,9 +137,7 @@ class PocketBaseClient:
         )
         return _player_from_record(record)
 
-    async def register_guest(
-        self, player_id: str, email: str, password: str
-    ) -> PlayerSession:
+    async def register_guest(self, player_id: str, email: str, password: str) -> PlayerSession:
         await self.admin_request(
             "PATCH",
             f"/api/collections/players/records/{player_id}",
@@ -154,9 +150,7 @@ class PocketBaseClient:
         )
         return await self.login(email, password)
 
-    async def promote_google_guest(
-        self, player_id: str, session: PlayerSession
-    ) -> PlayerSession:
+    async def promote_google_guest(self, player_id: str, session: PlayerSession) -> PlayerSession:
         if (
             session.player.id != player_id
             or not session.player.is_guest
@@ -211,13 +205,9 @@ class PocketBaseClient:
             if not items:
                 break
             for game in items:
-                await self.admin_request(
-                    "DELETE", f'/api/collections/games/records/{game["id"]}'
-                )
+                await self.admin_request("DELETE", f"/api/collections/games/records/{game['id']}")
 
-        await self.admin_request(
-            "DELETE", f"/api/collections/players/records/{player_id}"
-        )
+        await self.admin_request("DELETE", f"/api/collections/players/records/{player_id}")
 
     async def _has_google_auth(self, player_id: str) -> bool:
         response = await self.admin_request(
@@ -226,9 +216,7 @@ class PocketBaseClient:
             params={
                 "page": 1,
                 "perPage": 1,
-                "filter": (
-                    f'recordRef = "{_filter_value(player_id)}" && provider = "google"'
-                ),
+                "filter": (f'recordRef = "{_filter_value(player_id)}" && provider = "google"'),
             },
         )
         return bool(response["items"])
@@ -239,7 +227,7 @@ class PocketBaseClient:
         try:
             return await self._request(method, path, headers=headers, **kwargs)
         except PocketBaseError as error:
-            if error.status_code != 401:
+            if error.status_code not in {401, 403}:
                 raise
         token = await self._get_admin_token(force=True)
         headers["Authorization"] = token
