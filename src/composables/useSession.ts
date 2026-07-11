@@ -1,6 +1,8 @@
 import { computed, ref } from 'vue'
 
-import { api, setAccessToken } from '@/services/api'
+import { unregisterPushNotifications } from '@/composables/usePushNotifications'
+import { isNativeApp } from '@/logic/platform'
+import { ApiError, api, setAccessToken } from '@/services/api'
 import { setRealtimeToken } from '@/services/pocketbase'
 import type { AuthSession, GuestRecovery, Player } from '@/types/game'
 
@@ -76,7 +78,7 @@ async function bootstrapSession() {
     error.value = ''
     const stored = readStoredSession()
     try {
-      if (stored) {
+      if (stored && (!isNativeApp || !stored.player.is_guest)) {
         setToken(stored.token)
         try {
           const refreshedPlayer = await api.getMe()
@@ -90,13 +92,16 @@ async function bootstrapSession() {
           const restored = await api.login(stored.recovery.identity, stored.recovery.password)
           applySession(restored, stored.recovery, stored.profileConfigured)
         }
-      } else {
+      } else if (!isNativeApp) {
         await createGuest()
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY)
       setToken('')
-      await createGuest()
+      player.value = null
+      recovery.value = null
+      profileConfigured.value = false
+      if (!isNativeApp) await createGuest()
     } finally {
       ready.value = true
       bootstrapPromise = null
@@ -117,6 +122,16 @@ async function register(email: string, password: string) {
   applySession(session, null, true)
 }
 
+async function createAccount(
+  email: string,
+  password: string,
+  displayName: string,
+  avatarSeed: string,
+) {
+  const session = await api.createAccount(email, password, displayName, avatarSeed)
+  applySession(session, null, true)
+}
+
 async function login(email: string, password: string, mergeGuestProgress = false) {
   if (mergeGuestProgress) {
     const session = await api.mergeLogin(email, password)
@@ -127,18 +142,22 @@ async function login(email: string, password: string, mergeGuestProgress = false
     }
   }
   const session = await api.login(email, password)
+  if (isNativeApp && session.player.is_guest) {
+    throw new ApiError(403, 'Sign in with a registered account')
+  }
   applySession(session, null, true)
   return null
 }
 
 async function logout() {
   ready.value = false
+  await unregisterPushNotifications()
   localStorage.removeItem(STORAGE_KEY)
   player.value = null
   recovery.value = null
   profileConfigured.value = false
   setToken('')
-  await createGuest()
+  if (!isNativeApp) await createGuest()
   ready.value = true
 }
 
@@ -152,6 +171,7 @@ export function useSession() {
     bootstrapSession,
     updateProfile,
     register,
+    createAccount,
     login,
     logout,
   }

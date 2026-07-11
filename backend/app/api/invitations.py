@@ -1,6 +1,10 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, BackgroundTasks, status
 
-from app.api.dependencies import CurrentPlayer, InvitationServiceDependency
+from app.api.dependencies import (
+    CurrentPlayer,
+    InvitationServiceDependency,
+    PushServiceDependency,
+)
 from app.api.schemas import ChallengeRequest, InvitationResponse
 
 router = APIRouter(prefix="/api/invitations", tags=["invitations"])
@@ -17,10 +21,14 @@ async def list_invitations(
 @router.post("", response_model=InvitationResponse, status_code=status.HTTP_201_CREATED)
 async def send_invitation(
     body: ChallengeRequest,
+    background_tasks: BackgroundTasks,
     player: CurrentPlayer,
     service: InvitationServiceDependency,
+    push: PushServiceDependency,
 ) -> InvitationResponse:
-    return InvitationResponse.from_domain(await service.send(player, body.player_id))
+    invitation = await service.send(player, body.player_id)
+    background_tasks.add_task(push.invitation_sent, invitation)
+    return InvitationResponse.from_domain(invitation)
 
 
 @router.post("/{invitation_id}/accept", response_model=InvitationResponse)

@@ -3,14 +3,17 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-from app.api import auth, games, invitations, leaderboard, matchmaking, presence, reactions
+from app.api import auth, games, invitations, leaderboard, matchmaking, presence, push, reactions
+from app.clients.firebase import FirebasePushGateway
 from app.clients.pocketbase import PocketBaseClient, PocketBaseError
 from app.config import Settings, get_settings
 from app.repositories.pocketbase_games import PocketBaseGameRepository
 from app.repositories.pocketbase_invitations import PocketBaseInvitationRepository
 from app.repositories.pocketbase_matchmaking import PocketBaseMatchmakingRepository
+from app.repositories.pocketbase_push import PocketBasePushDeviceRepository
 from app.repositories.pocketbase_reactions import PocketBaseReactionRepository
 from app.services.games import (
     GameConflict,
@@ -34,6 +37,12 @@ from app.services.matchmaking import (
     MatchmakingService,
 )
 from app.services.presence import PresenceService
+from app.services.push import (
+    PushDeviceRepository,
+    PushForbidden,
+    PushGateway,
+    PushNotificationService,
+)
 from app.services.reactions import ReactionInvalid, ReactionRepository, ReactionService
 
 
@@ -45,6 +54,8 @@ def create_app(
     invitation_repository: InvitationRepository | None = None,
     reaction_repository: ReactionRepository | None = None,
     matchmaking_repository: MatchmakingRepository | None = None,
+    push_repository: PushDeviceRepository | None = None,
+    push_gateway: PushGateway | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     owns_pocketbase = pocketbase is None
@@ -70,17 +81,29 @@ def create_app(
             game_service,
         )
         app.state.presence_service = PresenceService(game_service)
+        app.state.push_service = PushNotificationService(
+            push_repository or PocketBasePushDeviceRepository(client),
+            push_gateway or FirebasePushGateway(resolved_settings.firebase_credentials_json),
+        )
         yield
         if owns_pocketbase:
             await client.close()
 
     application = FastAPI(title="Gobang API", version="0.1.0", lifespan=lifespan)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=resolved_settings.cors_origin_list,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
     application.include_router(auth.router)
     application.include_router(games.router)
     application.include_router(invitations.router)
     application.include_router(reactions.router)
     application.include_router(matchmaking.router)
     application.include_router(presence.router)
+    application.include_router(push.router)
     application.include_router(leaderboard.router)
 
     @application.get("/health", tags=["system"])
@@ -137,6 +160,10 @@ def create_app(
     async def matchmaking_forbidden(
         _request: Request, error: MatchmakingForbidden
     ) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(error)})
+
+    @application.exception_handler(PushForbidden)
+    async def push_forbidden(_request: Request, error: PushForbidden) -> JSONResponse:
         return JSONResponse(status_code=403, content={"detail": str(error)})
 
     @application.exception_handler(PocketBaseError)

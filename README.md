@@ -48,6 +48,33 @@ npm run dev
 
 Vite expects `/api` and `/pb` on the same origin in production. For split local development, use the full Compose stack or add temporary Vite proxy entries targeting ports 8000 and 8090.
 
+## Android app
+
+The Android app reuses the Vue interface through Capacitor and talks to the same FastAPI and PocketBase deployment as the website. Android requires a registered account, does not create guest players, and omits the lobby's explanatory replay board. Gameplay, matchmaking, challenges, leaderboard, profiles, reactions, and realtime updates use the same routes and records as the web app.
+
+Android builds require Node.js, Android SDK 36, and JDK 21. Configure the shared public origin before syncing the app:
+
+```sh
+cp .env.android.example .env.android.local
+# Set VITE_API_BASE_URL to the HTTPS origin that serves both /api and /pb.
+npm install
+npm run android:build
+```
+
+The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. Use `npm run android:open` to open the project in Android Studio. `npm run android:bundle` creates a release app bundle after release signing is configured in Gradle.
+
+Push notifications use Firebase Cloud Messaging:
+
+1. Create a Firebase Android app with package ID `com.stromflix.gobang`.
+2. Download its `google-services.json` to `android/app/google-services.json`. This path is gitignored.
+3. Create a Firebase service-account key and set its complete JSON as the backend `FIREBASE_CREDENTIALS_JSON` secret.
+4. Deploy the updated PocketBase migrations and backend before distributing the app.
+5. Re-run `npm run android:sync` after changing web code or native plugin configuration.
+
+The backend registers each signed-in installation in `push_devices` and sends notifications after an opponent moves, sends a challenge, or requests a rematch. Tapping a move or rematch notification opens that game; challenge notifications open the lobby inbox. Foreground notifications are intentionally not presented as system banners.
+
+The app includes no billing, advertising, analytics, backup, contacts, storage, or location integration. Its Android permissions are limited to network access and those required by FCM. FCM necessarily processes the installation token and notification payload to deliver background notifications; gameplay and profile data are not sent to advertising or analytics providers.
+
 ## Checks
 
 ```sh
@@ -70,7 +97,7 @@ npm run test:e2e
 ## Coolify
 
 1. Create a Docker Compose resource from this repository.
-2. Set `PB_SUPERUSER_EMAIL` and a long random `PB_SUPERUSER_PASSWORD` as secrets.
+2. Set `PB_SUPERUSER_EMAIL`, a long random `PB_SUPERUSER_PASSWORD`, and `FIREBASE_CREDENTIALS_JSON` as secrets.
 3. Attach the public domain to the `caddy` service on port `80`.
 4. Keep the generated `pocketbase_data` volume persistent across deployments.
 5. Configure the health check against `/health` through the public domain.

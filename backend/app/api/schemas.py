@@ -7,6 +7,7 @@ from app.clients.pocketbase import GuestSession, PlayerSession
 from app.domain.game import Game, GameStatus, Move, Player
 from app.domain.invitation import Invitation, InvitationStatus
 from app.domain.matchmaking import MatchmakingStatus, MatchmakingTicket
+from app.domain.push import DevicePlatform
 from app.domain.reaction import GameReaction, ReactionKind
 from app.domain.rules import Stone
 from app.services.games import (
@@ -95,9 +96,22 @@ class RegisterRequest(LoginRequest):
     pass
 
 
+class CreateAccountRequest(LoginRequest):
+    display_name: DisplayName
+    avatar_seed: AvatarSeed
+
+
 class ProfileRequest(BaseModel):
     display_name: DisplayName
     avatar_seed: AvatarSeed
+
+
+class PushDeviceRequest(BaseModel):
+    token: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=4096),
+    ]
+    platform: DevicePlatform
 
 
 class PresenceHeartbeatRequest(BaseModel):

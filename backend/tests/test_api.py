@@ -9,6 +9,7 @@ from app.config import Settings
 from app.domain.game import Game, Player
 from app.domain.invitation import Invitation, InvitationStatus
 from app.domain.matchmaking import MatchmakingStatus, MatchmakingTicket
+from app.domain.push import PushDevice
 from app.domain.reaction import GameReaction
 from app.main import create_app
 from app.services.games import GameConflict
@@ -127,6 +128,31 @@ class MemoryMatchmakingRepository:
         return deepcopy(ticket)
 
 
+class MemoryPushRepository:
+    def __init__(self) -> None:
+        self.devices: dict[str, PushDevice] = {}
+
+    async def upsert(self, device: PushDevice) -> PushDevice:
+        stored = replace(device, id="push-device-1")
+        self.devices[stored.token] = deepcopy(stored)
+        return deepcopy(stored)
+
+    async def list_for_player(self, player_id: str) -> Sequence[PushDevice]:
+        return [
+            deepcopy(device)
+            for device in self.devices.values()
+            if device.player_id == player_id
+        ]
+
+    async def delete(self, player_id: str, token: str) -> None:
+        if token in self.devices and self.devices[token].player_id == player_id:
+            del self.devices[token]
+
+    async def delete_tokens(self, tokens: Sequence[str]) -> None:
+        for token in tokens:
+            self.devices.pop(token, None)
+
+
 class FakePocketBase:
     def __init__(self) -> None:
         self.players = {
@@ -153,6 +179,17 @@ class FakePocketBase:
         self.players["new-token"] = player
         return GuestSession("new-token", player, "guest@example.invalid", "guest-password")
 
+    async def create_account(
+        self,
+        email: str,
+        password: str,
+        display_name: str,
+        avatar_seed: str,
+    ) -> PlayerSession:
+        player = Player("new-account", display_name, avatar_seed, is_guest=False)
+        self.players["new-account-token"] = player
+        return PlayerSession("new-account-token", player)
+
     async def login(self, identity: str, password: str) -> PlayerSession:
         if identity != "user@example.com" or password != "password123":
             raise PocketBaseError(400, "Invalid credentials")
@@ -178,6 +215,7 @@ class FakePocketBase:
 def make_client(
     reaction_repository: MemoryReactionRepository | None = None,
     matchmaking_repository: MemoryMatchmakingRepository | None = None,
+    push_repository: MemoryPushRepository | None = None,
 ) -> TestClient:
     app = create_app(
         settings=Settings(frontend_dist="missing"),
@@ -188,6 +226,7 @@ def make_client(
         matchmaking_repository=(
             matchmaking_repository or MemoryMatchmakingRepository()
         ),
+        push_repository=push_repository,
     )
     return TestClient(app)
 
@@ -212,6 +251,69 @@ def test_guest_profile_and_registration_flow() -> None:
         )
         assert register_response.status_code == 200
         assert register_response.json()["player"]["is_guest"] is False
+
+
+def test_registered_account_can_be_created_without_guest_session() -> None:
+    with make_client() as client:
+        response = client.post(
+            "/api/auth/accounts",
+            json={
+                "email": "native@example.com",
+                "password": "password123",
+                "display_name": "Native player",
+                "avatar_seed": "native-player",
+            },
+        )
+
+        assert response.status_code == 201
+        assert response.json() == {
+            "token": "new-account-token",
+            "player": {
+                "id": "new-account",
+                "display_name": "Native player",
+                "avatar_seed": "native-player",
+                "is_guest": False,
+            },
+        }
+
+
+def test_registered_android_device_can_enable_push_notifications() -> None:
+    repository = MemoryPushRepository()
+    with make_client(push_repository=repository) as client:
+        preflight = client.options(
+            "/api/push/devices",
+            headers={
+                "Origin": "http://localhost",
+                "Access-Control-Request-Method": "PUT",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        assert preflight.status_code == 200
+        assert preflight.headers["access-control-allow-origin"] == "http://localhost"
+
+        registered = client.put(
+            "/api/push/devices",
+            headers={"Authorization": "Bearer account-token"},
+            json={"token": "android-token", "platform": "android"},
+        )
+        assert registered.status_code == 204
+        assert repository.devices["android-token"].player_id == "account"
+
+        guest = client.put(
+            "/api/push/devices",
+            headers={"Authorization": "Bearer guest-token"},
+            json={"token": "guest-device", "platform": "android"},
+        )
+        assert guest.status_code == 403
+
+        removed = client.request(
+            "DELETE",
+            "/api/push/devices",
+            headers={"Authorization": "Bearer account-token"},
+            json={"token": "android-token", "platform": "android"},
+        )
+        assert removed.status_code == 204
+        assert repository.devices == {}
 
 
 def test_guest_progress_can_be_merged_while_signing_in() -> None:

@@ -22,6 +22,7 @@ __pycache__/
 pocketbase/pb_data/
 playwright-report/
 test-results/
+android/app/google-services.json
 
 /cypress/videos/
 /cypress/screenshots/

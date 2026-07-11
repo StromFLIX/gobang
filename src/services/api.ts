@@ -11,6 +11,7 @@ import type {
   PresenceStats,
   ReactionKind,
 } from '@/types/game'
+import { backendUrl } from '@/logic/platform'
 
 export class ApiError extends Error {
   constructor(
@@ -36,11 +37,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.set('Authorization', `Bearer ${accessToken}`)
   }
 
-  const response = await fetch(path, { ...options, headers })
+  const response = await fetch(backendUrl(path), { ...options, headers })
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { detail?: string } | null
     throw new ApiError(response.status, body?.detail ?? 'Request failed')
   }
+  if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
@@ -50,6 +52,21 @@ function json(method: string, body?: unknown): RequestInit {
 
 export const api = {
   createGuest: () => request<GuestSession>('/api/auth/guest', json('POST')),
+  createAccount: (
+    email: string,
+    password: string,
+    displayName: string,
+    avatarSeed: string,
+  ) =>
+    request<AuthSession>(
+      '/api/auth/accounts',
+      json('POST', {
+        email,
+        password,
+        display_name: displayName,
+        avatar_seed: avatarSeed,
+      }),
+    ),
   login: (email: string, password: string) =>
     request<AuthSession>('/api/auth/login', json('POST', { email, password })),
   mergeLogin: (email: string, password: string) =>
@@ -104,4 +121,14 @@ export const api = {
     request<Game>(`/api/games/${gameId}/resign`, json('POST')),
   setRematch: (gameId: string, ready: boolean) =>
     request<Game>(`/api/games/${gameId}/rematch`, json('PUT', { ready })),
+  registerPushDevice: (token: string) =>
+    request<void>(
+      '/api/push/devices',
+      json('PUT', { token, platform: 'android' }),
+    ),
+  unregisterPushDevice: (token: string) =>
+    request<void>(
+      '/api/push/devices',
+      json('DELETE', { token, platform: 'android' }),
+    ),
 }

@@ -35,6 +35,7 @@ import {
   signalForGame,
   type OpponentGameGroup,
 } from '@/logic/games'
+import { isNativeApp } from '@/logic/platform'
 import { ApiError, api } from '@/services/api'
 import { subscribeToGame } from '@/services/pocketbase'
 import type { Game, Leaderboard, MatchmakingTicket } from '@/types/game'
@@ -513,6 +514,7 @@ async function signOut() {
   matchmakingTicket.value = null
   await logout()
   games.value = []
+  if (isNativeApp) return
   profileEditing.value = true
   await Promise.all([loadLeaderboard(), presenceHeartbeat()])
 }
@@ -587,7 +589,7 @@ function groupSummary(group: OpponentGameGroup) {
 
     <main v-if="ready && player" class="lobby-layout">
       <section class="lobby-intro" aria-labelledby="lobby-intro-title">
-        <LobbyMatchReplay />
+        <LobbyMatchReplay v-if="!isNativeApp" />
 
         <div class="lobby-entry">
           <p class="section-kicker">Play Gobang</p>

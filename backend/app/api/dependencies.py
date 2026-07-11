@@ -9,6 +9,7 @@ from app.services.games import GameService
 from app.services.invitations import InvitationService
 from app.services.matchmaking import MatchmakingService
 from app.services.presence import PresenceService
+from app.services.push import PushNotificationService
 from app.services.reactions import ReactionService
 
 bearer = HTTPBearer(auto_error=False)
@@ -38,6 +39,10 @@ def get_presence_service(request: Request) -> PresenceService:
     return request.app.state.presence_service
 
 
+def get_push_service(request: Request) -> PushNotificationService:
+    return request.app.state.push_service
+
+
 async def get_current_player(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
     pocketbase: Annotated[PocketBaseClient, Depends(get_pocketbase)],
@@ -63,4 +68,5 @@ MatchmakingServiceDependency = Annotated[
     MatchmakingService, Depends(get_matchmaking_service)
 ]
 PresenceServiceDependency = Annotated[PresenceService, Depends(get_presence_service)]
+PushServiceDependency = Annotated[PushNotificationService, Depends(get_push_service)]
 PocketBaseDependency = Annotated[PocketBaseClient, Depends(get_pocketbase)]

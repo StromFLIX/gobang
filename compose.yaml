@@ -24,6 +24,7 @@ services:
       PB_SUPERUSER_EMAIL: ${PB_SUPERUSER_EMAIL:?Set PB_SUPERUSER_EMAIL}
       PB_SUPERUSER_PASSWORD: ${PB_SUPERUSER_PASSWORD:?Set PB_SUPERUSER_PASSWORD}
       FRONTEND_DIST: /app/frontend_dist
+      FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
     depends_on:
       pocketbase:
         condition: service_healthy

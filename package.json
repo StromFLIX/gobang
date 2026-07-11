@@ -6,6 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
+    "build:android:web": "vite build --mode android",
+    "android:sync": "npm run build:android:web && cap sync android",
+    "android:open": "cap open android",
+    "android:build": "npm run android:sync && ./android/gradlew -p android assembleDebug",
+    "android:bundle": "npm run android:sync && ./android/gradlew -p android bundleRelease",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
@@ -17,6 +22,9 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/push-notifications": "^8.1.1",
     "@dicebear/collection": "^9.2.2",
     "@dicebear/core": "^9.2.2",
     "@lucide/vue": "^1.24.0",
@@ -28,6 +36,7 @@
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.1",
     "@playwright/test": "^1.55.0",
     "@tsconfig/node22": "^22.0.0",
     "@types/node": "^22.10.7",

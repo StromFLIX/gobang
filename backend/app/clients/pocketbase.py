@@ -94,6 +94,27 @@ class PocketBaseClient:
             password=password,
         )
 
+    async def create_account(
+        self,
+        email: str,
+        password: str,
+        display_name: str,
+        avatar_seed: str,
+    ) -> PlayerSession:
+        await self.admin_request(
+            "POST",
+            "/api/collections/players/records",
+            json={
+                "email": email,
+                "password": password,
+                "passwordConfirm": password,
+                "display_name": display_name,
+                "avatar_seed": avatar_seed,
+                "is_guest": False,
+            },
+        )
+        return await self.login(email, password)
+
     async def update_profile(
         self, player_id: str, display_name: str, avatar_seed: str
     ) -> Player:

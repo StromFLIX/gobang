@@ -1,6 +1,6 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, BackgroundTasks, status
 
-from app.api.dependencies import CurrentPlayer, GameServiceDependency
+from app.api.dependencies import CurrentPlayer, GameServiceDependency, PushServiceDependency
 from app.api.schemas import GameResponse, JoinRequest, MoveRequest, RematchRequest
 
 router = APIRouter(prefix="/api/games", tags=["games"])
@@ -44,10 +44,13 @@ async def get_game(
 async def play_move(
     game_id: str,
     body: MoveRequest,
+    background_tasks: BackgroundTasks,
     player: CurrentPlayer,
     service: GameServiceDependency,
+    push: PushServiceDependency,
 ) -> GameResponse:
     game = await service.move(game_id, player.id, body.position, body.expected_revision)
+    background_tasks.add_task(push.game_moved, game, player)
     return GameResponse.from_domain(game)
 
 
@@ -69,7 +72,12 @@ async def resign_game(
 async def set_rematch(
     game_id: str,
     body: RematchRequest,
+    background_tasks: BackgroundTasks,
     player: CurrentPlayer,
     service: GameServiceDependency,
+    push: PushServiceDependency,
 ) -> GameResponse:
-    return GameResponse.from_domain(await service.set_rematch(game_id, player.id, body.ready))
+    game = await service.set_rematch(game_id, player.id, body.ready)
+    if body.ready:
+        background_tasks.add_task(push.rematch_requested, game, player)
+    return GameResponse.from_domain(game)

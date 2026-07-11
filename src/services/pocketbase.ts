@@ -1,8 +1,9 @@
 import PocketBase, { type RecordModel } from 'pocketbase'
 
+import { backendUrl } from '@/logic/platform'
 import type { Game, GameReaction, Invitation, Player, Stone } from '@/types/game'
 
-const pocketbase = new PocketBase('/pb')
+const pocketbase = new PocketBase(backendUrl('/pb'))
 pocketbase.autoCancellation(false)
 
 export function setRealtimeToken(token: string) {

@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, status
 from app.api.dependencies import CurrentPlayer, GameServiceDependency, PocketBaseDependency
 from app.api.schemas import (
     AuthResponse,
+    CreateAccountRequest,
     GuestAuthResponse,
     LoginRequest,
     MergedAuthResponse,
@@ -12,6 +13,20 @@ from app.api.schemas import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+@router.post("/accounts", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+async def create_account(
+    body: CreateAccountRequest,
+    pocketbase: PocketBaseDependency,
+) -> AuthResponse:
+    session = await pocketbase.create_account(
+        str(body.email),
+        body.password,
+        body.display_name,
+        body.avatar_seed,
+    )
+    return AuthResponse.from_session(session)
 
 
 @router.post("/guest", response_model=GuestAuthResponse, status_code=status.HTTP_201_CREATED)
