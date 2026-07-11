@@ -14,10 +14,13 @@ WORKDIR /pb
 
 COPY pb_migrations /pb/pb_migrations
 COPY pb_hooks /pb/pb_hooks
+COPY entrypoint.sh /pb/entrypoint.sh
+
+RUN chmod +x /pb/entrypoint.sh
 
 EXPOSE 8090
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
     CMD wget -q --spider http://127.0.0.1:8090/api/health || exit 1
 
-CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090"]
+CMD ["/pb/entrypoint.sh"]

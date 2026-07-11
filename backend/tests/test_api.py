@@ -178,6 +178,7 @@ class FakePocketBase:
             "guest-token": Player("guest", "Felix", "felix"),
             "third-token": Player("third", "Third", "third"),
             "account-token": Player("account", "Account", "account", is_guest=False),
+            "google-token": Player("google", "Google", "google", is_guest=False),
             "rival-token": Player("rival", "Rival", "rival", is_guest=False),
         }
 
@@ -231,8 +232,14 @@ class FakePocketBase:
         self.players[token] = registered
         return PlayerSession("registered-token", registered)
 
-    async def delete_account(self, player_id: str, password: str) -> None:
-        if password != "password123":
+    async def delete_account(
+        self,
+        player_id: str,
+        *,
+        password: str | None = None,
+        google_token: str | None = None,
+    ) -> None:
+        if password != "password123" and google_token != "google-token":
             raise PocketBaseError(401, "Current password is incorrect")
         tokens = [token for token, player in self.players.items() if player.id == player_id]
         for token in tokens:
@@ -454,6 +461,55 @@ def test_registered_account_deletion_requires_password_and_removes_session() -> 
             ).status_code
             == 401
         )
+
+
+def test_registered_account_can_be_deleted_with_google_reauthentication() -> None:
+    with make_client() as client:
+        missing_proof = client.request(
+            "DELETE",
+            "/api/auth/account",
+            headers={"Authorization": "Bearer account-token"},
+            json={},
+        )
+        assert missing_proof.status_code == 422
+
+        ambiguous_proof = client.request(
+            "DELETE",
+            "/api/auth/account",
+            headers={"Authorization": "Bearer account-token"},
+            json={"password": "password123", "google_token": "google-token"},
+        )
+        assert ambiguous_proof.status_code == 422
+
+        deleted = client.request(
+            "DELETE",
+            "/api/auth/account",
+            headers={"Authorization": "Bearer account-token"},
+            json={"google_token": "google-token"},
+        )
+        assert deleted.status_code == 204
+
+
+def test_guest_progress_can_be_merged_into_verified_google_account() -> None:
+    with make_client() as client:
+        response = client.post(
+            "/api/auth/merge-google",
+            headers={"Authorization": "Bearer guest-token"},
+            json={"google_token": "google-token"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "token": "google-token",
+            "player": {
+                "id": "google",
+                "display_name": "Google",
+                "avatar_seed": "google",
+                "is_guest": False,
+            },
+            "transferred_games": 0,
+            "skipped_games": 0,
+        }
 
 
 def test_registered_android_device_can_enable_push_notifications() -> None:

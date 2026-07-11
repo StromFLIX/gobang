@@ -1,7 +1,7 @@
 import PocketBase, { BaseAuthStore, type RecordModel } from 'pocketbase'
 
 import { backendUrl } from '@/logic/platform'
-import type { Game, GameReaction, Invitation, Player, Stone } from '@/types/game'
+import type { AuthSession, Game, GameReaction, Invitation, Player, Stone } from '@/types/game'
 
 localStorage.removeItem('pocketbase_auth')
 
@@ -13,6 +13,53 @@ export function setRealtimeToken(token: string) {
     pocketbase.authStore.save(token, null)
   } else {
     pocketbase.authStore.clear()
+  }
+}
+
+interface GoogleAuthResult {
+  session: AuthSession
+  isNew: boolean
+  suggestedDisplayName: string
+}
+
+const GOOGLE_AUTH_REQUEST_KEY = 'google-auth'
+
+export async function hasGoogleAuth() {
+  const methods = await pocketbase.collection('players').listAuthMethods()
+  return methods.oauth2.providers.some((provider) => provider.name === 'google')
+}
+
+export function cancelGoogleAuth() {
+  pocketbase.cancelRequest(GOOGLE_AUTH_REQUEST_KEY)
+}
+
+export async function hasLinkedGoogleAuth(playerId: string) {
+  const externalAuths = await pocketbase.collection('players').listExternalAuths(playerId)
+  return externalAuths.some((externalAuth) => externalAuth.provider === 'google')
+}
+
+export async function authenticateWithGoogle(
+  displayName: string,
+  avatarSeed: string,
+  urlCallback?: (url: string) => void | Promise<void>,
+): Promise<GoogleAuthResult> {
+  const auth = await pocketbase.collection('players').authWithOAuth2({
+    provider: 'google',
+    createData: {
+      display_name: displayName,
+      avatar_seed: avatarSeed,
+      is_guest: false,
+    },
+    urlCallback,
+    requestKey: GOOGLE_AUTH_REQUEST_KEY,
+  })
+  return {
+    session: {
+      token: auth.token,
+      player: playerFromRecord(auth.record),
+    },
+    isNew: Boolean(auth.meta?.isNew),
+    suggestedDisplayName: String(auth.meta?.name ?? '').trim(),
   }
 }
 

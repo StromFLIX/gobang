@@ -6,16 +6,27 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AvatarImage from '@/components/AvatarImage.vue'
 import AvatarPicker from '@/components/AvatarPicker.vue'
 import ComicBrand from '@/components/ComicBrand.vue'
+import GoogleSignInButton from '@/components/GoogleSignInButton.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
 import { isNativeApp } from '@/logic/platform'
 import { ApiError, api } from '@/services/api'
+import { hasLinkedGoogleAuth } from '@/services/pocketbase'
 
 const route = useRoute()
 const router = useRouter()
-const { player, ready, bootstrapSession, updateProfile, register, login, logout, deleteAccount } =
-  useSession()
+const {
+  player,
+  ready,
+  bootstrapSession,
+  updateProfile,
+  register,
+  login,
+  logout,
+  deleteAccount,
+  deleteGoogleAccount,
+} = useSession()
 
 const mode = ref<'profile' | 'register' | 'login'>('profile')
 const displayName = ref('')
@@ -31,6 +42,7 @@ const deleteError = ref('')
 const notice = ref('')
 const deletePassword = ref('')
 const deleted = ref(false)
+const googleLinked = ref(false)
 
 const guestGameLabel = computed(() =>
   guestGameCount.value === 1 ? '1 game' : `${guestGameCount.value} games`,
@@ -53,6 +65,22 @@ watch(
       mode.value = requestedMode
     } else if (currentPlayer) {
       mode.value = currentPlayer.is_guest ? 'register' : 'profile'
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  player,
+  async (currentPlayer) => {
+    if (!currentPlayer || currentPlayer.is_guest) {
+      googleLinked.value = false
+      return
+    }
+    try {
+      googleLinked.value = await hasLinkedGoogleAuth(currentPlayer.id)
+    } catch {
+      googleLinked.value = false
     }
   },
   { immediate: true },
@@ -179,6 +207,22 @@ async function confirmDeleteAccount() {
     busy.value = false
   }
 }
+
+async function confirmGoogleDelete(_isNew: boolean, googleToken: string) {
+  busy.value = true
+  deleteError.value = ''
+  try {
+    await deleteGoogleAccount(googleToken)
+    deleted.value = true
+    mode.value = 'register'
+    await router.replace({ name: 'account', query: { mode: 'register' } })
+  } catch (reason) {
+    deleteError.value =
+      reason instanceof ApiError ? reason.message : 'Could not delete this account.'
+  } finally {
+    busy.value = false
+  }
+}
 </script>
 
 <template>
@@ -263,59 +307,67 @@ async function confirmDeleteAccount() {
             Your current {{ guestGameLabel }} will stay with the new account.
           </p>
         </div>
-        <form class="account-page-form" @submit.prevent="submitAuth">
-          <template v-if="mode === 'register'">
-            <label class="field-label" for="register-display-name">Player name</label>
+        <div class="account-page-auth">
+          <form class="account-page-form" @submit.prevent="submitAuth">
+            <template v-if="mode === 'register'">
+              <label class="field-label" for="register-display-name">Player name</label>
+              <input
+                id="register-display-name"
+                v-model="displayName"
+                class="text-input"
+                maxlength="24"
+                required
+                autocomplete="nickname"
+              />
+              <span class="field-label">Avatar</span>
+              <AvatarPicker v-model="avatarSeed" />
+            </template>
+            <label class="field-label" for="account-email">Email</label>
             <input
-              id="register-display-name"
-              v-model="displayName"
+              id="account-email"
+              v-model="email"
               class="text-input"
-              maxlength="24"
+              type="email"
               required
-              autocomplete="nickname"
+              autocomplete="email"
+              inputmode="email"
             />
-            <span class="field-label">Avatar</span>
-            <AvatarPicker v-model="avatarSeed" />
-          </template>
-          <label class="field-label" for="account-email">Email</label>
-          <input
-            id="account-email"
-            v-model="email"
-            class="text-input"
-            type="email"
-            required
-            autocomplete="email"
-            inputmode="email"
-          />
-          <label class="field-label" for="account-password">Password</label>
-          <input
-            id="account-password"
-            v-model="password"
-            class="text-input"
-            type="password"
-            minlength="8"
-            required
-            :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
-          />
-          <template v-if="mode === 'register'">
-            <label class="field-label" for="account-password-confirm">Confirm password</label>
+            <label class="field-label" for="account-password">Password</label>
             <input
-              id="account-password-confirm"
-              v-model="passwordConfirm"
+              id="account-password"
+              v-model="password"
               class="text-input"
               type="password"
               minlength="8"
               required
-              autocomplete="new-password"
+              :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
             />
-          </template>
-          <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-          <button type="submit" class="button button--primary" :disabled="busy">
-            <UserPlus v-if="mode === 'register'" :size="18" />
-            <LogIn v-else :size="18" />
-            {{ mode === 'register' ? 'Create account' : 'Sign in' }}
-          </button>
-        </form>
+            <template v-if="mode === 'register'">
+              <label class="field-label" for="account-password-confirm">Confirm password</label>
+              <input
+                id="account-password-confirm"
+                v-model="passwordConfirm"
+                class="text-input"
+                type="password"
+                minlength="8"
+                required
+                autocomplete="new-password"
+              />
+            </template>
+            <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+            <button type="submit" class="button button--primary" :disabled="busy">
+              <UserPlus v-if="mode === 'register'" :size="18" />
+              <LogIn v-else :size="18" />
+              {{ mode === 'register' ? 'Create account' : 'Sign in' }}
+            </button>
+          </form>
+          <GoogleSignInButton
+            :display-name="displayName"
+            :avatar-seed="avatarSeed"
+            :disabled="busy"
+            @authenticated="notice = 'Signed in with Google.'"
+          />
+        </div>
       </section>
 
       <section v-else-if="player.is_guest" class="account-page-section merge-section">
@@ -370,7 +422,18 @@ async function confirmDeleteAccount() {
             will also lose those games from their history.
           </p>
         </div>
-        <form class="account-page-form" @submit.prevent="confirmDeleteAccount">
+        <GoogleSignInButton
+          v-if="googleLinked"
+          :display-name="player.display_name"
+          :avatar-seed="player.avatar_seed"
+          :expected-player-id="player.id"
+          label="Reauthenticate with Google and delete account"
+          :show-divider="false"
+          danger
+          :disabled="busy"
+          @authenticated="confirmGoogleDelete"
+        />
+        <form v-else class="account-page-form" @submit.prevent="confirmDeleteAccount">
           <label class="field-label" for="delete-password">Current password</label>
           <input
             id="delete-password"
@@ -499,6 +562,10 @@ async function confirmDeleteAccount() {
 .account-page-actions {
   display: grid;
   gap: 0.75rem;
+}
+
+.account-page-auth {
+  min-width: 0;
 }
 
 .account-page-form .button,

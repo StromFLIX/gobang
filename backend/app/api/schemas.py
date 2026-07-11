@@ -109,7 +109,18 @@ class ConfirmVerificationRequest(BaseModel):
 
 
 class DeleteAccountRequest(BaseModel):
-    password: Password
+    password: Password | None = None
+    google_token: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=4096),
+    ] | None = None
+
+
+class GoogleAuthRequest(BaseModel):
+    google_token: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=4096),
+    ]
 
 
 class ProfileRequest(BaseModel):

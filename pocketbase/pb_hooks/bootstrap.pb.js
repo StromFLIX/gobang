@@ -17,9 +17,9 @@ onBootstrap((event) => {
         return port
     }
 
-    function requiredEnvironment(name) {
+    function requiredEnvironment(name, feature) {
         const value = $os.getenv(name)
-        if (!value) throw new Error(name + " is required when PB_SMTP_ENABLED=true")
+        if (!value) throw new Error(name + " is required when " + feature + "=true")
         return value
     }
 
@@ -41,10 +41,10 @@ onBootstrap((event) => {
                 throw new Error("PB_SMTP_AUTH_METHOD must be PLAIN or LOGIN")
             }
 
-            settings.meta.appURL = requiredEnvironment("PB_APP_URL").replace(/\/$/, "")
+            settings.meta.appURL = requiredEnvironment("PB_APP_URL", "PB_SMTP_ENABLED").replace(/\/$/, "")
             settings.meta.senderName = $os.getenv("PB_MAIL_SENDER_NAME") || settings.meta.appName
-            settings.meta.senderAddress = requiredEnvironment("PB_MAIL_SENDER_ADDRESS")
-            settings.smtp.host = requiredEnvironment("PB_SMTP_HOST")
+            settings.meta.senderAddress = requiredEnvironment("PB_MAIL_SENDER_ADDRESS", "PB_SMTP_ENABLED")
+            settings.smtp.host = requiredEnvironment("PB_SMTP_HOST", "PB_SMTP_ENABLED")
             settings.smtp.port = environmentPort("PB_SMTP_PORT", 587)
             settings.smtp.username = username
             settings.smtp.password = password
@@ -78,3 +78,33 @@ onBootstrap((event) => {
     superuser.set("password", password)
     event.app.save(superuser)
 })
+
+function configureGoogleAuth(app) {
+    const enabledValue = $os.getenv("PB_GOOGLE_AUTH_ENABLED") || "false"
+    if (enabledValue !== "true" && enabledValue !== "false") {
+        throw new Error("PB_GOOGLE_AUTH_ENABLED must be true or false")
+    }
+
+    const enabled = enabledValue === "true"
+    const clientId = $os.getenv("PB_GOOGLE_CLIENT_ID")
+    const clientSecret = $os.getenv("PB_GOOGLE_CLIENT_SECRET")
+    if (enabled && (!clientId || !clientSecret)) {
+        throw new Error(
+            "PB_GOOGLE_CLIENT_ID and PB_GOOGLE_CLIENT_SECRET are required when PB_GOOGLE_AUTH_ENABLED=true",
+        )
+    }
+
+    const players = app.findCollectionByNameOrId("players")
+    players.oauth2.enabled = enabled
+    players.oauth2.providers = enabled
+        ? [{ name: "google", clientId, clientSecret }]
+        : []
+    app.save(players)
+}
+
+$app.rootCmd.addCommand(new Command({
+    use: "configure-google-auth",
+    run: () => {
+        configureGoogleAuth($app)
+    },
+}))

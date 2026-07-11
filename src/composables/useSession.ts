@@ -1,9 +1,14 @@
 import { computed, ref } from 'vue'
+import { Browser } from '@capacitor/browser'
 
 import { unregisterPushNotifications } from '@/composables/usePushNotifications'
 import { isNativeApp } from '@/logic/platform'
 import { ApiError, api, setAccessToken } from '@/services/api'
-import { setRealtimeToken } from '@/services/pocketbase'
+import {
+  authenticateWithGoogle,
+  cancelGoogleAuth,
+  setRealtimeToken,
+} from '@/services/pocketbase'
 import type { AuthSession, GuestRecovery, Player } from '@/types/game'
 
 const STORAGE_KEY = 'gobang.session.v1'
@@ -149,6 +154,72 @@ async function login(email: string, password: string, mergeGuestProgress = false
   return null
 }
 
+async function runGoogleAuth(
+  displayName: string,
+  avatarSeed: string,
+) {
+  const initialDisplayName = displayName.trim() || 'Player'
+  let oauthComplete = false
+  const browserFinished = isNativeApp
+    ? await Browser.addListener('browserFinished', () => {
+        if (!oauthComplete) cancelGoogleAuth()
+      })
+    : null
+  try {
+    const result = await authenticateWithGoogle(
+      initialDisplayName,
+      avatarSeed,
+      isNativeApp
+        ? (url) => Browser.open({ url, toolbarColor: '#246646' })
+        : undefined,
+    )
+    oauthComplete = true
+    return result
+  } finally {
+    await browserFinished?.remove()
+  }
+}
+
+async function loginWithGoogle(
+  displayName: string,
+  avatarSeed: string,
+  mergeGuestProgress = true,
+) {
+  const initialDisplayName = displayName.trim() || 'Player'
+  const activeToken = token.value
+  const result = await runGoogleAuth(initialDisplayName, avatarSeed)
+  let session = result.session
+  let transferredGames = 0
+  try {
+    if (mergeGuestProgress && player.value?.is_guest) {
+      const merged = await api.mergeGoogle(result.session.token)
+      session = merged
+      transferredGames = merged.transferred_games
+    }
+  } catch (mergeError) {
+    setRealtimeToken(activeToken)
+    throw mergeError
+  }
+  applySession(session, null, true)
+  if (result.isNew && initialDisplayName === 'Player' && result.suggestedDisplayName) {
+    await updateProfile(result.suggestedDisplayName.slice(0, 24), avatarSeed)
+  }
+  return { isNew: result.isNew, token: session.token, transferredGames }
+}
+
+async function reauthenticateWithGoogle(playerId: string, avatarSeed: string) {
+  const activeToken = token.value
+  try {
+    const result = await runGoogleAuth(player.value?.display_name ?? 'Player', avatarSeed)
+    if (result.session.player.id !== playerId) {
+      throw new ApiError(403, 'Choose the Google account linked to this Gobang player')
+    }
+    return result.session.token
+  } finally {
+    setRealtimeToken(activeToken)
+  }
+}
+
 async function logout() {
   ready.value = false
   await unregisterPushNotifications()
@@ -159,6 +230,15 @@ async function logout() {
 
 async function deleteAccount(password: string, createWebGuest = true) {
   await api.deleteAccount(password)
+  await finishAccountDeletion(createWebGuest)
+}
+
+async function deleteGoogleAccount(googleToken: string, createWebGuest = true) {
+  await api.deleteGoogleAccount(googleToken)
+  await finishAccountDeletion(createWebGuest)
+}
+
+async function finishAccountDeletion(createWebGuest: boolean) {
   ready.value = false
   await unregisterPushNotifications()
   clearSession()
@@ -186,7 +266,10 @@ export function useSession() {
     register,
     createAccount,
     login,
+    loginWithGoogle,
+    reauthenticateWithGoogle,
     logout,
     deleteAccount,
+    deleteGoogleAccount,
   }
 }

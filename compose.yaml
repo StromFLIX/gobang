@@ -27,6 +27,9 @@ services:
       PB_SMTP_AUTH_METHOD: '${PB_SMTP_AUTH_METHOD:-PLAIN}'
       PB_SMTP_TLS: '${PB_SMTP_TLS:-false}'
       PB_SMTP_LOCAL_NAME: '${PB_SMTP_LOCAL_NAME:-}'
+      PB_GOOGLE_AUTH_ENABLED: '${PB_GOOGLE_AUTH_ENABLED:-false}'
+      PB_GOOGLE_CLIENT_ID: '${PB_GOOGLE_CLIENT_ID:-}'
+      PB_GOOGLE_CLIENT_SECRET: '${PB_GOOGLE_CLIENT_SECRET:-}'
     restart: unless-stopped
     logging: *default-logging
     volumes:

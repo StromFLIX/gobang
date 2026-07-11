@@ -154,18 +154,31 @@ class PocketBaseClient:
         )
         return await self.login(email, password)
 
-    async def delete_account(self, player_id: str, password: str) -> None:
-        record = await self.admin_request(
-            "GET", f"/api/collections/players/records/{player_id}"
-        )
-        try:
-            session = await self.login(str(record["email"]), password)
-        except PocketBaseError as error:
-            if error.status_code in {400, 401}:
-                raise PocketBaseError(401, "Current password is incorrect") from error
-            raise
-        if session.player.id != player_id:
-            raise PocketBaseError(401, "Current password is incorrect")
+    async def delete_account(
+        self,
+        player_id: str,
+        *,
+        password: str | None = None,
+        google_token: str | None = None,
+    ) -> None:
+        if password is not None:
+            record = await self.admin_request(
+                "GET", f"/api/collections/players/records/{player_id}"
+            )
+            try:
+                session = await self.login(str(record["email"]), password)
+            except PocketBaseError as error:
+                if error.status_code in {400, 401}:
+                    raise PocketBaseError(401, "Current password is incorrect") from error
+                raise
+            if session.player.id != player_id:
+                raise PocketBaseError(401, "Current password is incorrect")
+        elif google_token is not None:
+            session = await self.verify_player(google_token)
+            if session.player.id != player_id or not await self._has_google_auth(player_id):
+                raise PocketBaseError(401, "Google reauthentication does not match this account")
+        else:
+            raise PocketBaseError(422, "Account deletion requires reauthentication")
 
         player_filter = _filter_value(player_id)
         while True:
@@ -189,6 +202,20 @@ class PocketBaseClient:
         await self.admin_request(
             "DELETE", f"/api/collections/players/records/{player_id}"
         )
+
+    async def _has_google_auth(self, player_id: str) -> bool:
+        response = await self.admin_request(
+            "GET",
+            "/api/collections/_externalAuths/records",
+            params={
+                "page": 1,
+                "perPage": 1,
+                "filter": (
+                    f'recordRef = "{_filter_value(player_id)}" && provider = "google"'
+                ),
+            },
+        )
+        return bool(response["items"])
 
     async def admin_request(self, method: str, path: str, **kwargs: Any) -> Any:
         token = await self._get_admin_token()

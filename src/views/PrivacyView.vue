@@ -64,11 +64,12 @@ import {
         </p>
         <ul>
           <li>
-            <strong>Account and game operation:</strong> email address, password credential, display
-            name, avatar, account and session identifiers, games, moves, scores, ratings,
-            invitations, matchmaking state, and reactions. These are processed to create and
-            authenticate your account and provide the requested multiplayer game. Where the GDPR
-            applies, the basis is performance of the user agreement under Article 6(1)(b).
+            <strong>Account and game operation:</strong> email address, password credential when you
+            use email sign-in, Google account identifier and basic profile when you choose Google
+            sign-in, display name, avatar, account and session identifiers, games, moves, scores,
+            ratings, invitations, matchmaking state, and reactions. These are processed to create
+            and authenticate your account and provide the requested multiplayer game. Where the
+            GDPR applies, the basis is performance of the user agreement under Article 6(1)(b).
           </li>
           <li>
             <strong>Presence and realtime updates:</strong> recent activity and game connection
@@ -101,12 +102,13 @@ import {
       <section>
         <h2>Required and optional information</h2>
         <p>
-          An email address, password, display name, and avatar choice are required to create an
-          Android account. Without them, the registered multiplayer service cannot be provided. The
-          website can create a temporary guest profile without an email address. Push notifications
-          are optional; refusing permission does not prevent gameplay. Gobang does not use
-          advertising, behavioral analytics, payments, or data brokerage. This notice will be
-          updated before any planned payment feature is enabled.
+          An email address, display name, avatar choice, and either a password or Google sign-in are
+          required to create an Android account. Without them, the registered multiplayer service
+          cannot be provided. Google sign-in is optional because email and password remain
+          available. The website can create a temporary guest profile without an email address.
+          Push notifications are optional; refusing permission does not prevent gameplay. Gobang
+          does not use advertising, behavioral analytics, payments, or data brokerage. This notice
+          will be updated before any planned payment feature is enabled.
         </p>
       </section>
 
@@ -126,6 +128,14 @@ import {
           rankings.
         </p>
         <p>
+          When you choose Google sign-in, Google receives the authentication request, redirect URI,
+          IP address, and browser or device information needed for the sign-in flow. Google returns
+          a provider identifier, email address, display name, and profile image URL to PocketBase.
+          Gobang stores the provider link, email, and chosen Gobang profile; it does not store the
+          Google profile image or receive the Google password. Google's use of this information is
+          governed by its privacy policy.
+        </p>
+        <p>
           Google Firebase Cloud Messaging is used only for optional Android notifications. Google
           receives the installation token, IP and technical device information, and a notification
           payload containing an event type, an in-app path, and possibly another player's display
@@ -137,12 +147,12 @@ import {
         <h2>International transfers</h2>
         <p>
           The primary Gobang servers are in the countries stated in the recipients section. Firebase
-          data may additionally be processed outside Switzerland and the European Economic Area,
-          depending on Google's processing locations. For transfers from Switzerland, data is sent
-          to countries recognized as providing adequate protection or under safeguards recognized by
-          Article 16 FADP. Where the GDPR applies and no adequacy decision covers a destination,
-          Google states that it uses safeguards such as the European Commission's standard
-          contractual clauses. Details about Firebase are available in Google's
+          authentication and Firebase data may additionally be processed outside Switzerland and
+          the European Economic Area, depending on Google's processing locations. For transfers
+          from Switzerland, data is sent to countries recognized as providing adequate protection
+          or under safeguards recognized by Article 16 FADP. Where the GDPR applies and no adequacy
+          decision covers a destination, Google states that it uses safeguards such as the European
+          Commission's standard contractual clauses. Details about Firebase are available in Google's
           <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noreferrer">
             Firebase privacy information</a
           >.

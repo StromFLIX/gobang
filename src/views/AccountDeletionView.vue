@@ -4,11 +4,13 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import ComicBrand from '@/components/ComicBrand.vue'
+import GoogleSignInButton from '@/components/GoogleSignInButton.vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import { useSession } from '@/composables/useSession'
+import { AVATAR_PRESETS } from '@/logic/avatar'
 import { ApiError } from '@/services/api'
 
-const { player, login, deleteAccount } = useSession()
+const { player, login, deleteAccount, deleteGoogleAccount } = useSession()
 const email = ref('')
 const password = ref('')
 const busy = ref(false)
@@ -25,6 +27,19 @@ async function submit() {
     }
     await deleteAccount(password.value, false)
     password.value = ''
+    deleted.value = true
+  } catch (reason) {
+    error.value = reason instanceof ApiError ? reason.message : 'Could not delete this account.'
+  } finally {
+    busy.value = false
+  }
+}
+
+async function deleteWithGoogle(_isNew: boolean, googleToken: string) {
+  error.value = ''
+  busy.value = true
+  try {
+    await deleteGoogleAccount(googleToken, false)
     deleted.value = true
   } catch (reason) {
     error.value = reason instanceof ApiError ? reason.message : 'Could not delete this account.'
@@ -70,37 +85,48 @@ async function submit() {
         <RouterLink to="/" class="button button--secondary">Return to Gobang</RouterLink>
       </section>
 
-      <form v-else class="deletion-form" @submit.prevent="submit">
-        <div>
-          <p class="section-kicker">Confirm identity</p>
-          <h2>Sign in to delete</h2>
-        </div>
-        <label class="field-label" for="deletion-email">Email</label>
-        <input
-          id="deletion-email"
-          v-model="email"
-          class="text-input"
-          type="email"
-          required
-          autocomplete="email"
-          inputmode="email"
+      <div v-else class="deletion-form">
+        <form class="deletion-password-form" @submit.prevent="submit">
+          <div>
+            <p class="section-kicker">Confirm identity</p>
+            <h2>Sign in to delete</h2>
+          </div>
+          <label class="field-label" for="deletion-email">Email</label>
+          <input
+            id="deletion-email"
+            v-model="email"
+            class="text-input"
+            type="email"
+            required
+            autocomplete="email"
+            inputmode="email"
+          />
+          <label class="field-label" for="deletion-password">Current password</label>
+          <input
+            id="deletion-password"
+            v-model="password"
+            class="text-input"
+            type="password"
+            minlength="8"
+            required
+            autocomplete="current-password"
+          />
+          <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+          <button type="submit" class="button button--danger" :disabled="busy">
+            <Trash2 :size="18" />
+            Permanently delete account
+          </button>
+        </form>
+        <GoogleSignInButton
+          display-name="Player"
+          :avatar-seed="AVATAR_PRESETS[0]"
+          label="Sign in with Google and delete account"
+          :merge-guest-progress="false"
+          danger
+          :disabled="busy"
+          @authenticated="deleteWithGoogle"
         />
-        <label class="field-label" for="deletion-password">Current password</label>
-        <input
-          id="deletion-password"
-          v-model="password"
-          class="text-input"
-          type="password"
-          minlength="8"
-          required
-          autocomplete="current-password"
-        />
-        <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-        <button type="submit" class="button button--danger" :disabled="busy">
-          <Trash2 :size="18" />
-          Permanently delete account
-        </button>
-      </form>
+      </div>
     </main>
     <SiteFooter />
   </div>
@@ -174,6 +200,11 @@ async function submit() {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
+}
+
+.deletion-password-form {
+  display: grid;
+  gap: 0.8rem;
 }
 
 .deletion-form h2,

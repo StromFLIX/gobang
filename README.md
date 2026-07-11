@@ -52,6 +52,39 @@ Creating a registered account or upgrading a browser guest requests PocketBase's
 
 Before enabling production email, publish the provider's SPF and DKIM records, add an appropriate DMARC policy, and update the privacy notice with the chosen email delivery provider and processing location. Deploy both `pocketbase` and `app` after changing these values or the verification flow.
 
+## Sign in with Google
+
+Google authentication uses PocketBase OAuth2 through the system browser on Android and a popup on the web. Email/password sign-in remains available. The Android package does not need a Google OAuth client or SHA certificate for this flow; PocketBase uses one **Web application** OAuth client on the server.
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and select or create the project used for Gobang.
+2. Under **Google Auth Platform**, configure Branding and Audience. While the app is in testing, add each Google account that may sign in as a test user. Publish the app before general release.
+3. Open **Clients**, create an OAuth client with application type **Web application**, and add this authorized redirect URI exactly:
+
+	```text
+	https://your-public-domain.example/pb/api/oauth2-redirect
+	```
+
+	For local Compose testing, also add `http://localhost:8080/pb/api/oauth2-redirect`.
+4. Copy the generated Web client ID and client secret into `.env` locally or the Coolify resource environment:
+
+	```env
+	PB_GOOGLE_AUTH_ENABLED=true
+	PB_GOOGLE_CLIENT_ID=123456789-example.apps.googleusercontent.com
+	PB_GOOGLE_CLIENT_SECRET=replace-with-the-google-client-secret
+	```
+
+5. Rebuild and redeploy the `pocketbase` and `app` services. PocketBase applies the provider settings after migrations on every restart.
+
+Treat `PB_GOOGLE_CLIENT_SECRET` as a deployment secret. The client ID is public. Neither value belongs in `.env.android.local`, `google-services.json`, the Android source, or GitHub Actions. `google-services.json` and `FIREBASE_CREDENTIALS_JSON` remain separate Firebase push-notification credentials.
+
+Verify the deployment before testing the button:
+
+```sh
+curl https://your-public-domain.example/pb/api/collections/players/auth-methods
+```
+
+The JSON response should contain an enabled `oauth2` object with a provider named `google`. A `redirect_uri_mismatch` message from Google means the URI in Google Cloud does not exactly match the public `/pb/api/oauth2-redirect` URL, including scheme, host, and path.
+
 The lobby leaderboard ranks players by a current Elo rating calculated from timestamped round results, starting at 1200 with a K-factor of 32. It also shows W-L-D records for the last 7 days or all time. `Against friends` groups the current player's record by opponents they have played, while result history shows who beat whom. Scores created before the timestamped result migration remain in all-time totals but cannot affect Elo or appear in the 7-day view or dated result history.
 
 Registered players can challenge other registered players from the overall leaderboard's `Around you`, `Top 10`, and `All players` views. A challenge is a private pending invitation, not a game: the recipient sees it in the realtime header inbox and may accept or dismiss it, while the sender may cancel it. Acceptance creates the active game and opens it for both players. Pending challenges expire after 24 hours. Anonymous players can still view rankings and play through shared game links, but they cannot send or receive leaderboard challenges.
@@ -160,7 +193,7 @@ The Android project targets API 36, uses a monotonically increasing CI version c
 - `https://gobang.stromflix.com/impressum`
 - `https://gobang.stromflix.com/account-deletion`
 
-The deletion page signs the user in with their current credentials and permanently removes the account, games involving it, invitations, matchmaking tickets, reactions, and notification devices. Deploy the frontend and backend together before submitting these URLs to Play Console.
+The deletion page reauthenticates with the current password or linked Google account and permanently removes the account, games involving it, invitations, matchmaking tickets, reactions, and notification devices. Deploy the frontend and backend together before submitting these URLs to Play Console.
 
 The remaining publication work is intentionally manual in Play Console: create the app listing, enroll in Play App Signing, upload `gobang-android.aab`, complete App access and Content rating, declare the target audience, submit the Data safety answers that match the privacy policy, provide screenshots/graphics/contact details, select countries and pricing, and complete any required testing track. The first Play upload establishes the application and upload-key relationship; later CI publication can be added after Play grants service-account access.
 
@@ -208,7 +241,7 @@ npm run test:e2e
 ## Coolify
 
 1. Create a Docker Compose resource from this repository.
-2. Set `PB_SUPERUSER_EMAIL`, a long random `PB_SUPERUSER_PASSWORD`, `FIREBASE_CREDENTIALS_JSON`, and `PB_SMTP_PASSWORD` as secrets. Set every required `LEGAL_*` value and the non-secret `PB_APP_*`, `PB_MAIL_*`, and `PB_SMTP_*` values documented above.
+2. Set `PB_SUPERUSER_EMAIL`, a long random `PB_SUPERUSER_PASSWORD`, `FIREBASE_CREDENTIALS_JSON`, `PB_SMTP_PASSWORD`, and `PB_GOOGLE_CLIENT_SECRET` as secrets. Set every required `LEGAL_*` value and the non-secret `PB_APP_*`, `PB_MAIL_*`, `PB_SMTP_*`, `PB_GOOGLE_AUTH_ENABLED`, and `PB_GOOGLE_CLIENT_ID` values documented above.
 3. Attach the public domain to the `caddy` service on port `80`.
 4. Keep the generated `pocketbase_data` volume persistent across deployments.
 5. Configure the health check against `/health` through the public domain.

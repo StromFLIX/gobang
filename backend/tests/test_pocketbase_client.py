@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.clients.pocketbase import PocketBaseClient
+from app.clients.pocketbase import PocketBaseClient, PocketBaseError
 from app.config import Settings
 
 
@@ -95,7 +95,7 @@ async def test_delete_account_reauthenticates_and_removes_games_before_player() 
     )
     client = PocketBaseClient(Settings(), http_client)
 
-    await client.delete_account("player-id", "password123")
+    await client.delete_account("player-id", password="password123")
     await http_client.aclose()
 
     assert requests[-3:] == [
@@ -103,3 +103,82 @@ async def test_delete_account_reauthenticates_and_removes_games_before_player() 
         ("GET", "/api/collections/games/records"),
         ("DELETE", "/api/collections/players/records/player-id"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_delete_account_accepts_matching_linked_google_reauthentication() -> None:
+    requests: list[tuple[str, str]] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path))
+        if request.url.path == "/api/collections/players/auth-refresh":
+            assert request.headers["Authorization"] == "fresh-google-token"
+            return httpx.Response(
+                200,
+                json={
+                    "token": "refreshed-token",
+                    "record": {
+                        "id": "player-id",
+                        "display_name": "Player",
+                        "avatar_seed": "player",
+                        "is_guest": False,
+                    },
+                },
+            )
+        if request.url.path == "/api/collections/_superusers/auth-with-password":
+            return httpx.Response(200, json={"token": "admin-token"})
+        if request.url.path == "/api/collections/_externalAuths/records":
+            assert request.url.params["filter"] == (
+                'recordRef = "player-id" && provider = "google"'
+            )
+            return httpx.Response(200, json={"items": [{"provider": "google"}]})
+        if request.url.path == "/api/collections/games/records":
+            return httpx.Response(200, json={"items": []})
+        if request.url.path == "/api/collections/players/records/player-id":
+            return httpx.Response(204)
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    http_client = httpx.AsyncClient(
+        base_url="http://pocketbase.test",
+        transport=httpx.MockTransport(handle),
+    )
+    client = PocketBaseClient(Settings(), http_client)
+
+    await client.delete_account("player-id", google_token="fresh-google-token")
+    await http_client.aclose()
+
+    assert requests[-2:] == [
+        ("GET", "/api/collections/games/records"),
+        ("DELETE", "/api/collections/players/records/player-id"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_delete_account_rejects_google_reauthentication_for_another_player() -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/collections/players/auth-refresh":
+            return httpx.Response(
+                200,
+                json={
+                    "token": "refreshed-token",
+                    "record": {
+                        "id": "another-player",
+                        "display_name": "Another player",
+                        "avatar_seed": "another-player",
+                        "is_guest": False,
+                    },
+                },
+            )
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    http_client = httpx.AsyncClient(
+        base_url="http://pocketbase.test",
+        transport=httpx.MockTransport(handle),
+    )
+    client = PocketBaseClient(Settings(), http_client)
+
+    with pytest.raises(
+        PocketBaseError, match="Google reauthentication does not match this account"
+    ):
+        await client.delete_account("player-id", google_token="wrong-player-token")
+    await http_client.aclose()

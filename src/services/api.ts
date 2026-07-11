@@ -73,6 +73,11 @@ export const api = {
     request<void>('/api/auth/verification', json('POST', { token })),
   mergeLogin: (email: string, password: string) =>
     request<MergedAuthSession>('/api/auth/merge-login', json('POST', { email, password })),
+  mergeGoogle: (googleToken: string) =>
+    request<MergedAuthSession>(
+      '/api/auth/merge-google',
+      json('POST', { google_token: googleToken }),
+    ),
   getMe: () => request<Player>('/api/auth/me'),
   updateProfile: (displayName: string, avatarSeed: string) =>
     request<Player>(
@@ -83,6 +88,8 @@ export const api = {
     request<AuthSession>('/api/auth/register', json('POST', { email, password })),
   deleteAccount: (password: string) =>
     request<void>('/api/auth/account', json('DELETE', { password })),
+  deleteGoogleAccount: (googleToken: string) =>
+    request<void>('/api/auth/account', json('DELETE', { google_token: googleToken })),
   getLeaderboard: () => request<Leaderboard>('/api/leaderboard'),
   listInvitations: () => request<Invitation[]>('/api/invitations'),
   sendInvitation: (playerId: string) =>

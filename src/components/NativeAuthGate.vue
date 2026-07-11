@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import AvatarPicker from '@/components/AvatarPicker.vue'
+import GoogleSignInButton from '@/components/GoogleSignInButton.vue'
 import { useSession } from '@/composables/useSession'
 import { AVATAR_PRESETS } from '@/logic/avatar'
 import { hasConfiguredBackend } from '@/logic/platform'
@@ -144,6 +145,11 @@ async function submit() {
           {{ mode === 'login' ? 'Sign in' : 'Create account' }}
         </button>
       </form>
+      <GoogleSignInButton
+        :display-name="displayName"
+        :avatar-seed="avatarSeed"
+        :disabled="busy"
+      />
       <nav class="native-auth-legal" aria-label="Account and privacy information">
         <RouterLink to="/privacy">Privacy</RouterLink>
         <RouterLink to="/account-deletion">Delete account</RouterLink>

@@ -6,6 +6,7 @@ from app.api.schemas import (
     ConfirmVerificationRequest,
     CreateAccountRequest,
     DeleteAccountRequest,
+    GoogleAuthRequest,
     GuestAuthResponse,
     LoginRequest,
     MergedAuthResponse,
@@ -50,7 +51,16 @@ async def delete_account(
 ) -> Response:
     if player.is_guest:
         raise HTTPException(status.HTTP_409_CONFLICT, "Only registered accounts can be deleted")
-    await pocketbase.delete_account(player.id, body.password)
+    if (body.password is None) == (body.google_token is None):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Provide either the current password or Google reauthentication",
+        )
+    await pocketbase.delete_account(
+        player.id,
+        password=body.password,
+        google_token=body.google_token,
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -76,6 +86,22 @@ async def merge_login(
     session = await pocketbase.login(str(body.email), body.password)
     if session.player.is_guest:
         raise HTTPException(status.HTTP_409_CONFLICT, "Sign in to a registered account")
+    merge = await games.merge_player(player.id, session.player)
+    return MergedAuthResponse.from_merge(session, merge)
+
+
+@router.post("/merge-google", response_model=MergedAuthResponse)
+async def merge_google(
+    body: GoogleAuthRequest,
+    player: CurrentPlayer,
+    pocketbase: PocketBaseDependency,
+    games: GameServiceDependency,
+) -> MergedAuthResponse:
+    if not player.is_guest:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only guest progress can be merged")
+    session = await pocketbase.verify_player(body.google_token)
+    if session.player.is_guest or session.player.id == player.id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Sign in to a registered Google account")
     merge = await games.merge_player(player.id, session.player)
     return MergedAuthResponse.from_merge(session, merge)
 
