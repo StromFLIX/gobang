@@ -25,6 +25,12 @@ const router = createRouter({
       meta: { title: 'Private Gobang Match', noIndex: true },
     },
     {
+      path: '/bot',
+      name: 'bot',
+      component: () => import('../views/LocalAiGameView.vue'),
+      meta: { public: true, title: 'Play Gobang Against the Bot', noIndex: true },
+    },
+    {
       path: '/account',
       name: 'account',
       component: () => import('../views/AccountView.vue'),

@@ -4,6 +4,7 @@ import {
   Bell,
   ChevronDown,
   ChevronUp,
+  Cpu,
   Grid3X3,
   Link2,
   LogIn,
@@ -61,6 +62,7 @@ const { stats: presenceStats, heartbeat: presenceHeartbeat, startPresence } = us
 const displayName = ref('')
 const avatarSeed = ref<string>(AVATAR_PRESETS[0])
 const inviteCode = ref('')
+const selectedOpponent = ref<'ranked' | 'friend' | 'bot'>('bot')
 const games = ref<Game[]>([])
 const leaderboard = ref<Leaderboard | null>(null)
 const leaderboardLoading = ref(false)
@@ -571,10 +573,10 @@ async function dismissGames(selectedGames: Game[]) {
 
         <div class="lobby-entry">
           <p class="section-kicker">Play Gobang</p>
-          <h1 id="lobby-intro-title">Play Gobang online.</h1>
+          <h1 id="lobby-intro-title">Play Gobang.</h1>
           <p class="lobby-entry__lead">
-            A Gomoku-style strategy game with five-in-a-row wins, pair captures, and a live
-            opponent. Find a ranked match or invite a friend with one link.
+            A Gomoku-style strategy game with five-in-a-row wins and pair captures. Choose your
+            opponent and start playing.
           </p>
 
           <div v-if="!hasPlayerName" class="lobby-player-setup">
@@ -593,100 +595,159 @@ async function dismissGames(selectedGames: Game[]) {
             </div>
           </div>
 
-          <section class="lobby-choice" aria-labelledby="ranked-choice-title">
-            <div class="lobby-choice__heading">
-              <span><Swords :size="19" /></span>
-              <div>
-                <h2 id="ranked-choice-title">Play someone new</h2>
-                <p>
-                  {{
-                    player.is_guest
-                      ? 'Sign in or create an account for ranked matchmaking.'
-                      : 'Enter the ranked queue and play for Elo.'
-                  }}
-                </p>
-              </div>
-              <strong v-if="!player.is_guest && leaderboard" class="lobby-choice__rating">
-                {{ leaderboard.player.elo_rating }} Elo
-              </strong>
-            </div>
-
-            <div class="lobby-population" aria-label="Approximate live population">
-              <span
-                ><Radio :size="15" /><strong>{{ presenceStats?.online_players ?? '...' }}</strong>
-                online</span
-              >
-              <span
-                ><Users :size="15" /><strong>{{ presenceStats?.playing_players ?? '...' }}</strong>
-                playing</span
-              >
-              <span
-                ><Grid3X3 :size="15" /><strong>{{ presenceStats?.active_matches ?? '...' }}</strong>
-                matches</span
-              >
-            </div>
-
-            <div v-if="player.is_guest" class="lobby-choice__actions">
-              <button type="button" class="button button--primary" @click="openAccount('register')">
-                <UserPlus :size="18" />
-                Create account
-              </button>
-              <button type="button" class="button button--secondary" @click="openAccount('login')">
-                <LogIn :size="18" />
-                Sign in
-              </button>
-            </div>
-            <button
-              v-else
-              type="button"
-              class="button button--primary lobby-ranked-button"
-              :disabled="matchmakingBusy || matchmakingOpen"
-              @click="startRankedMatchmaking"
-            >
-              <Search :size="19" />
-              Find ranked match
-            </button>
-          </section>
-
-          <section class="lobby-choice" aria-labelledby="friends-choice-title">
-            <div class="lobby-choice__heading">
-              <span><Users :size="19" /></span>
-              <div>
-                <h2 id="friends-choice-title">Play with friends</h2>
-                <p>Open a private game and share its link, or join with a code.</p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              class="button button--secondary lobby-private-button"
-              :disabled="busy"
-              @click="startGame"
-            >
-              <Plus :size="19" />
-              Start game
-            </button>
-            <div class="join-row lobby-join-row">
-              <span class="input-icon"><Link2 :size="18" /></span>
-              <input
-                id="invite-code"
-                v-model="inviteCode"
-                class="text-input text-input--icon"
-                aria-label="Game link or code"
-                autocomplete="off"
-                placeholder="Paste game link or code"
-                @keyup.enter="joinGame"
-              />
+          <section class="lobby-play-picker" aria-labelledby="opponent-picker-title">
+            <p class="section-kicker">Opponent</p>
+            <h2 id="opponent-picker-title">Who do you want to play?</h2>
+            <div class="lobby-opponent-options" role="group" aria-label="Choose an opponent">
               <button
                 type="button"
-                class="icon-button icon-button--confirm"
-                :disabled="busy"
-                title="Join game"
-                aria-label="Join game"
-                @click="joinGame"
+                :class="['lobby-opponent-option', { active: selectedOpponent === 'ranked' }]"
+                :aria-pressed="selectedOpponent === 'ranked'"
+                @click="selectedOpponent = 'ranked'"
               >
-                <ArrowRight :size="20" />
+                <Swords :size="19" />
+                <strong>Someone new</strong>
+                <small>Ranked</small>
               </button>
+              <button
+                type="button"
+                :class="['lobby-opponent-option', { active: selectedOpponent === 'friend' }]"
+                :aria-pressed="selectedOpponent === 'friend'"
+                @click="selectedOpponent = 'friend'"
+              >
+                <Users :size="19" />
+                <strong>A friend</strong>
+                <small>Private</small>
+              </button>
+              <button
+                type="button"
+                :class="['lobby-opponent-option', { active: selectedOpponent === 'bot' }]"
+                :aria-pressed="selectedOpponent === 'bot'"
+                @click="selectedOpponent = 'bot'"
+              >
+                <Cpu :size="19" />
+                <strong>The bot</strong>
+                <small>Local</small>
+              </button>
+            </div>
+
+            <div class="lobby-action-panel">
+              <section
+                v-if="selectedOpponent === 'ranked'"
+                class="lobby-choice"
+                aria-labelledby="ranked-choice-title"
+              >
+                <div class="lobby-choice__heading">
+                  <div>
+                    <h2 id="ranked-choice-title">Ranked matchmaking</h2>
+                    <p>
+                      {{
+                        player.is_guest
+                          ? 'Sign in or create an account to play someone new.'
+                          : 'Enter the queue and play for Elo.'
+                      }}
+                    </p>
+                  </div>
+                  <strong v-if="!player.is_guest && leaderboard" class="lobby-choice__rating">
+                    {{ leaderboard.player.elo_rating }} Elo
+                  </strong>
+                </div>
+
+                <div class="lobby-population" aria-label="Approximate live population">
+                  <span
+                    ><Radio :size="15" /><strong>{{ presenceStats?.online_players ?? '...' }}</strong>
+                    online</span
+                  >
+                  <span
+                    ><Users :size="15" /><strong>{{ presenceStats?.playing_players ?? '...' }}</strong>
+                    playing</span
+                  >
+                  <span
+                    ><Grid3X3 :size="15" /><strong>{{ presenceStats?.active_matches ?? '...' }}</strong>
+                    matches</span
+                  >
+                </div>
+
+                <div v-if="player.is_guest" class="lobby-choice__actions">
+                  <button type="button" class="button button--primary" @click="openAccount('register')">
+                    <UserPlus :size="18" />
+                    Create account
+                  </button>
+                  <button type="button" class="button button--secondary" @click="openAccount('login')">
+                    <LogIn :size="18" />
+                    Sign in
+                  </button>
+                </div>
+                <button
+                  v-else
+                  type="button"
+                  class="button button--primary lobby-ranked-button"
+                  :disabled="matchmakingBusy || matchmakingOpen"
+                  @click="startRankedMatchmaking"
+                >
+                  <Search :size="19" />
+                  Find ranked match
+                </button>
+              </section>
+
+              <section
+                v-else-if="selectedOpponent === 'friend'"
+                class="lobby-choice"
+                aria-labelledby="friends-choice-title"
+              >
+                <div class="lobby-choice__heading">
+                  <div>
+                    <h2 id="friends-choice-title">Private game</h2>
+                    <p>Start a game to share, or join one with its link or code.</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  class="button button--secondary lobby-private-button"
+                  :disabled="busy"
+                  @click="startGame"
+                >
+                  <Plus :size="19" />
+                  Start game
+                </button>
+                <div class="join-row lobby-join-row">
+                  <span class="input-icon"><Link2 :size="18" /></span>
+                  <input
+                    id="invite-code"
+                    v-model="inviteCode"
+                    class="text-input text-input--icon"
+                    aria-label="Game link or code"
+                    autocomplete="off"
+                    placeholder="Paste game link or code"
+                    @keyup.enter="joinGame"
+                  />
+                  <button
+                    type="button"
+                    class="icon-button icon-button--confirm"
+                    :disabled="busy"
+                    title="Join game"
+                    aria-label="Join game"
+                    @click="joinGame"
+                  >
+                    <ArrowRight :size="20" />
+                  </button>
+                </div>
+              </section>
+
+              <section v-else class="lobby-choice" aria-labelledby="bot-choice-title">
+                <div class="lobby-choice__heading">
+                  <div>
+                    <h2 id="bot-choice-title">Local practice</h2>
+                    <p>Play a one-second search bot. This match never affects Elo or history.</p>
+                  </div>
+                </div>
+
+                <RouterLink to="/bot" class="button button--secondary lobby-bot-button">
+                  <Cpu :size="19" />
+                  Play the bot
+                </RouterLink>
+              </section>
             </div>
           </section>
 

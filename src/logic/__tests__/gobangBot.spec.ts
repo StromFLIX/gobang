@@ -1,0 +1,66 @@
+import { describe, expect, it } from 'vitest'
+
+import { findBestMove } from '@/logic/gobangBot'
+import { emptyBoard } from '@/logic/localGame'
+import type { Stone } from '@/types/game'
+
+function boardWith(stones: Record<number, Stone>) {
+  const board = emptyBoard()
+  for (const [position, stone] of Object.entries(stones)) board[Number(position)] = stone
+  return board
+}
+
+describe('Gobang bot', () => {
+  it('opens in the center', () => {
+    expect(
+      findBestMove({ board: emptyBoard(), stone: 'black', blockedPositions: [], timeBudgetMs: 25 })
+        .position,
+    ).toBe(112)
+  })
+
+  it('plays an immediate winning move', () => {
+    const result = findBestMove({
+      board: boardWith({ 0: 'black', 1: 'black', 2: 'black', 3: 'black' }),
+      stone: 'black',
+      blockedPositions: [],
+      timeBudgetMs: 100,
+    })
+
+    expect(result.position).toBe(4)
+  })
+
+  it('blocks an opponent immediate win', () => {
+    const result = findBestMove({
+      board: boardWith({ 0: 'white', 1: 'white', 2: 'white', 3: 'white', 16: 'black' }),
+      stone: 'black',
+      blockedPositions: [],
+      timeBudgetMs: 150,
+      maxDepth: 3,
+    })
+
+    expect(result.position).toBe(4)
+  })
+
+  it('never selects an occupied or temporarily blocked point', () => {
+    const board = boardWith({ 112: 'white', 111: 'black' })
+    const result = findBestMove({
+      board,
+      stone: 'black',
+      blockedPositions: [96, 97, 98, 110, 113, 126, 127, 128],
+      timeBudgetMs: 30,
+    })
+
+    expect(result.position).not.toBeNull()
+    expect(board[result.position!]).toBeNull()
+    expect([96, 97, 98, 110, 113, 126, 127, 128]).not.toContain(result.position)
+  })
+
+  it('does not mutate the supplied position', () => {
+    const board = boardWith({ 112: 'black', 113: 'white' })
+    const before = [...board]
+
+    findBestMove({ board, stone: 'black', blockedPositions: [], timeBudgetMs: 20 })
+
+    expect(board).toEqual(before)
+  })
+})

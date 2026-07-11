@@ -348,27 +348,92 @@
   margin-bottom: 0.3rem;
 }
 
-.lobby-choice {
-  padding: 1rem 0;
+.lobby-play-picker {
+  padding-top: 1rem;
   border-top: 1px solid var(--color-border);
+}
+
+.lobby-play-picker > h2 {
+  margin-top: 0.15rem;
+  font-size: 1.15rem;
+}
+
+.lobby-opponent-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.lobby-opponent-option {
+  display: grid;
+  min-width: 0;
+  min-height: 3.75rem;
+  grid-template-columns: 1.4rem minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 0 0.4rem;
+  align-content: center;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.lobby-opponent-option svg {
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+.lobby-opponent-option strong,
+.lobby-opponent-option small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-opponent-option strong {
+  color: var(--color-text);
+  font-size: 0.76rem;
+}
+
+.lobby-opponent-option small {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.lobby-opponent-option:hover,
+.lobby-opponent-option:focus-visible {
+  border-color: #87a994;
+  outline: none;
+}
+
+.lobby-opponent-option.active {
+  border-color: var(--color-green);
+  color: var(--color-green-dark);
+  background: #e5eee8;
+  box-shadow: inset 0 -3px 0 var(--color-green);
+}
+
+.lobby-action-panel {
+  min-height: 11.25rem;
+}
+
+.lobby-choice {
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--color-border);
+  margin-top: 0.8rem;
 }
 
 .lobby-choice__heading {
   display: grid;
-  grid-template-columns: 2.35rem minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.65rem;
   align-items: start;
-}
-
-.lobby-choice__heading > span {
-  display: grid;
-  width: 2.35rem;
-  height: 2.35rem;
-  place-items: center;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  color: var(--color-green-dark);
-  background: var(--color-surface);
 }
 
 .lobby-choice h2 {
@@ -421,11 +486,13 @@
 }
 
 .lobby-ranked-button,
-.lobby-private-button {
+.lobby-private-button,
+.lobby-bot-button {
   width: 100%;
 }
 
-.lobby-private-button {
+.lobby-private-button,
+.lobby-bot-button {
   margin-top: 0.8rem;
 }
 
@@ -1070,6 +1137,21 @@
   background: #f6e7e5;
 }
 
+.local-mode-badge {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #aac3b3;
+  border-radius: 5px;
+  color: var(--color-green-dark);
+  background: #e5eee8;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .game-layout {
   width: min(100% - 1.5rem, 74rem);
   margin: 0 auto;
@@ -1375,6 +1457,77 @@
   gap: 0.55rem;
 }
 
+.local-match-status .section-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.local-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.local-score strong {
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.bot-thinking-bar {
+  position: relative;
+  height: 0.3rem;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--color-surface-muted);
+}
+
+.bot-thinking-bar i {
+  position: absolute;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-green);
+  animation: bot-thinking 900ms ease-in-out infinite alternate;
+}
+
+@keyframes bot-thinking {
+  from { transform: translateX(-15%); }
+  to { transform: translateX(155%); }
+}
+
+.bot-search-detail {
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.local-round-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0 0.35rem;
+}
+
+.local-round-actions > *,
+.local-round-actions .button {
+  width: 100%;
+}
+
+.local-round-actions .resign-confirm {
+  grid-template-columns: 1fr;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bot-thinking-bar i {
+    width: 100%;
+    animation: none;
+  }
+}
+
 .rules-block .section-kicker {
   margin: 0;
 }
@@ -1609,11 +1762,29 @@
   .resign-action {
     padding: 0 0.75rem;
   }
+
+  .local-round-actions {
+    padding: 0 0.75rem;
+  }
 }
 
 @media (max-width: 430px) {
   .game-header__actions {
     gap: 0.35rem;
+  }
+
+  .lobby-opponent-option {
+    min-height: 4.4rem;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 1.3rem auto auto;
+    justify-items: center;
+    gap: 0.05rem;
+    padding: 0.45rem 0.25rem;
+    text-align: center;
+  }
+
+  .lobby-opponent-option svg {
+    grid-row: auto;
   }
 
   .game-list-item__link {
