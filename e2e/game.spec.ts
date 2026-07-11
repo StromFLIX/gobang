@@ -2,24 +2,30 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function configurePlayer(page: Page, name: string, glasses: string) {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Choose your match.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Play Gobang.' })).toBeVisible()
   await expect(page.getByLabel('Replay of a Gobang match')).toBeVisible()
-  await page.getByLabel('Your player name').fill(name)
-  await page.getByRole('button', { name: 'Edit player' }).click()
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('dialog', { name: 'Player menu' }).getByText('Edit player').click()
+  await expect(page.getByRole('heading', { name: 'Name and avatar' })).toBeVisible()
+  const playerName = page.getByLabel('Player name')
+  await playerName.fill(name)
   await page.getByLabel('Glasses').selectOption(glasses)
+  await page.getByRole('button', { name: 'Save player' }).click()
+  await expect(page.getByRole('status')).toHaveText('Player profile updated.')
+  await page.getByRole('link', { name: 'Back to lobby' }).click()
+  await expect(page.getByRole('heading', { name: 'Play Gobang.' })).toBeVisible()
 }
 
 async function registerPlayer(page: Page, name: string, email: string) {
   await configurePlayer(page, name, 'glasses2')
-  await page.getByRole('button', { name: 'Save player' }).click()
-  await page.locator('.account-summary').getByRole('button', { name: 'Sign in' }).click()
-  const dialog = page.getByRole('dialog')
-  await dialog.getByRole('button', { name: 'Create account' }).click()
-  await dialog.getByLabel('Email').fill(email)
-  await dialog.getByLabel('Password', { exact: true }).fill('BrowserPass42!')
-  await dialog.getByLabel('Confirm password').fill('BrowserPass42!')
-  await dialog.locator('form').getByRole('button', { name: 'Create account' }).click()
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('dialog', { name: 'Player menu' }).getByText('Create account').click()
+  await page.getByLabel('Email').fill(email)
+  await page.getByLabel('Password', { exact: true }).fill('BrowserPass42!')
+  await page.getByLabel('Confirm password').fill('BrowserPass42!')
+  await page.locator('form').getByRole('button', { name: 'Create account' }).click()
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible({ timeout: 10_000 })
+  await page.getByRole('link', { name: 'Back to lobby' }).click()
   await expect(page.locator('.account-summary__name')).toHaveText(name)
 }
 
@@ -33,6 +39,11 @@ async function authenticatedGames(page: Page) {
     })
     return (await response.json()) as { id: string; status: string }[]
   })
+}
+
+async function startPrivateGame(page: Page) {
+  await page.getByRole('button', { name: /A friend/ }).click()
+  await page.getByRole('button', { name: 'Start game' }).click()
 }
 
 test('ranked matchmaking waits, cancels, and pairs two accounts once', async ({ browser }) => {
@@ -112,7 +123,7 @@ test('registered players can challenge from the leaderboard and accept in realti
   await registerPlayer(challenger, challengerName, `challenger-${suffix}@example.com`)
   await registerPlayer(recipient, recipientName, `recipient-${suffix}@example.com`)
 
-  await challenger.getByRole('button', { name: 'Start game' }).click()
+  await startPrivateGame(challenger)
   await expect(challenger).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
   const originalGamePath = new URL(challenger.url()).pathname
   await recipient.goto(challenger.url())
@@ -161,7 +172,7 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   const guest = await guestContext.newPage()
 
   await configurePlayer(host, 'Host player', 'glasses3')
-  await host.getByRole('button', { name: 'Start game' }).click()
+  await startPrivateGame(host)
   await expect(host).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
   await expect(host.getByText('Game is open')).toBeVisible()
 
@@ -206,9 +217,11 @@ test('two private players receive realtime turn updates', async ({ browser }) =>
   await host.screenshot({ path: 'test-results/mobile-rules-actions.png', fullPage: true })
   await host.setViewportSize({ width: 1280, height: 900 })
 
-  await host.getByRole('button', { name: 'Send Shit' }).click()
-  await expect(guest.locator('.reaction-popup img[data-reaction="poop"]')).toBeVisible()
-  await expect(guest.locator('.reaction-popup')).toContainText('Host player')
+  await host.getByRole('button', { name: 'Send Poop' }).click()
+  const incomingReaction = guest.getByRole('status', { name: 'Host player reacted poop' })
+  await expect(incomingReaction).toBeVisible()
+  await expect(incomingReaction.locator('[data-reaction-art="poop"]')).toBeVisible()
+  await expect(incomingReaction).toContainText('Host player')
   await expect(host.locator('.reaction-popup')).toHaveCount(0)
   await guest.screenshot({ path: 'test-results/reaction-popup.png' })
   await expect(guest.locator('.reaction-popup')).toBeHidden({ timeout: 3_000 })
@@ -288,7 +301,7 @@ test('mobile lobby and board fit a 390 by 844 viewport', async ({ browser }) => 
     true,
   )
 
-  await page.getByRole('button', { name: 'Start game' }).click()
+  await startPrivateGame(page)
   await expect(page).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
   await expect(page.locator('.connection-pill')).toContainText('live')
   const liveBox = await page.locator('.connection-pill').boundingBox()
@@ -381,7 +394,7 @@ test('an upgraded guest can continue from another device', async ({ browser }) =
   const password = 'BrowserPass42!'
 
   await configurePlayer(firstDevice, 'Cross-device player', 'glasses5')
-  await firstDevice.getByRole('button', { name: 'Start game' }).click()
+  await startPrivateGame(firstDevice)
   await expect(firstDevice.getByText('Game is open')).toBeVisible()
   const roomPath = new URL(firstDevice.url()).pathname
   await firstDevice.getByRole('link', { name: 'Back to lobby' }).click()
@@ -440,7 +453,7 @@ test('guest games can be merged into an existing account', async ({ browser }) =
   const guestContext = await browser.newContext({ viewport: { width: 1200, height: 850 } })
   const guestPage = await guestContext.newPage()
   await configurePlayer(guestPage, 'Guest with progress', 'glasses3')
-  await guestPage.getByRole('button', { name: 'Start game' }).click()
+  await startPrivateGame(guestPage)
   const gamePath = new URL(guestPage.url()).pathname
   await guestPage.getByRole('link', { name: 'Back to lobby' }).click()
 
@@ -468,7 +481,7 @@ test('a finished round appears in personal leaderboard history', async ({ browse
   const password = 'BrowserPass42!'
 
   await configurePlayer(host, 'Leaderboard host', 'glasses3')
-  await host.getByRole('button', { name: 'Start game' }).click()
+  await startPrivateGame(host)
   await expect(host).toHaveURL(/\/game\/[A-Za-z0-9_-]+$/)
   await guest.goto(host.url())
   await guest.locator('#join-player-name').fill('Leaderboard friend')

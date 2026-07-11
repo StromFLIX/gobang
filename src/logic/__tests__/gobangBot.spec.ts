@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { findBestMove } from '@/logic/gobangBot'
+import { BOT_PROFILES, findBestMove } from '@/logic/gobangBot'
 import { emptyBoard } from '@/logic/localGame'
 import type { Stone } from '@/types/game'
 
@@ -11,6 +11,17 @@ function boardWith(stones: Record<number, Stone>) {
 }
 
 describe('Gobang bot', () => {
+  it('uses a one-second easy profile and five-second stronger profiles', () => {
+    expect(BOT_PROFILES.easy.timeBudgetMs).toBe(1_000)
+    expect(BOT_PROFILES.medium.timeBudgetMs).toBe(5_000)
+    expect(BOT_PROFILES.hard.timeBudgetMs).toBe(5_000)
+    expect(BOT_PROFILES.medium.maxDepth).toBeGreaterThan(BOT_PROFILES.easy.maxDepth)
+    expect(BOT_PROFILES.hard.threatScore).toBeLessThan(BOT_PROFILES.medium.threatScore)
+    expect(BOT_PROFILES.hard.tacticalExtensionDepth).toBeGreaterThan(
+      BOT_PROFILES.medium.tacticalExtensionDepth,
+    )
+  })
+
   it('opens in the center', () => {
     expect(
       findBestMove({ board: emptyBoard(), stone: 'black', blockedPositions: [], timeBudgetMs: 25 })
@@ -87,6 +98,26 @@ describe('Gobang bot', () => {
       blockedPositions: [],
       timeBudgetMs: 500,
       maxDepth: 4,
+    })
+
+    expect(result.position).toBe(112)
+  })
+
+  it('uses hard threat-space search to defend an open-three junction', () => {
+    const result = findBestMove({
+      board: boardWith({
+        82: 'white',
+        97: 'white',
+        110: 'white',
+        111: 'white',
+        16: 'black',
+        144: 'black',
+      }),
+      stone: 'black',
+      blockedPositions: [],
+      difficulty: 'hard',
+      timeBudgetMs: 500,
+      maxDepth: 1,
     })
 
     expect(result.position).toBe(112)

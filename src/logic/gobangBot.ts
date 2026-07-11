@@ -2,7 +2,8 @@ import { applyLocalMove, BOARD_SIZE, CELL_COUNT, opponent } from '@/logic/localG
 import type { Stone } from '@/types/game'
 
 const WIN_SCORE = 1_000_000_000
-const TACTICAL_EXTENSION_DEPTH = 4
+const FOUR_THREAT_SCORE = 180_000
+const OPEN_THREE_THREAT_SCORE = 30_000
 const PRIMARY_DIRECTIONS = [
   [0, 1],
   [1, 0],
@@ -11,10 +12,49 @@ const PRIMARY_DIRECTIONS = [
 ] as const
 const LINES = buildLines()
 
+export type BotDifficulty = 'easy' | 'medium' | 'hard'
+
+export interface BotProfile {
+  timeBudgetMs: number
+  maxDepth: number
+  tacticalExtensionDepth: number
+  threatScore: number
+  rootCandidateLimit: number
+  candidateLimit: number
+}
+
+export const BOT_PROFILES: Record<BotDifficulty, BotProfile> = {
+  easy: {
+    timeBudgetMs: 1_000,
+    maxDepth: 8,
+    tacticalExtensionDepth: 4,
+    threatScore: FOUR_THREAT_SCORE,
+    rootCandidateLimit: 24,
+    candidateLimit: 14,
+  },
+  medium: {
+    timeBudgetMs: 5_000,
+    maxDepth: 10,
+    tacticalExtensionDepth: 6,
+    threatScore: FOUR_THREAT_SCORE,
+    rootCandidateLimit: 28,
+    candidateLimit: 16,
+  },
+  hard: {
+    timeBudgetMs: 5_000,
+    maxDepth: 10,
+    tacticalExtensionDepth: 8,
+    threatScore: OPEN_THREE_THREAT_SCORE,
+    rootCandidateLimit: 28,
+    candidateLimit: 16,
+  },
+}
+
 export interface BotRequest {
   board: (Stone | null)[]
   stone: Stone
   blockedPositions: number[]
+  difficulty?: BotDifficulty
   timeBudgetMs?: number
   maxDepth?: number
 }
@@ -37,6 +77,7 @@ interface SearchContext {
   deadline: number
   nodes: number
   table: Map<string, TableEntry>
+  profile: BotProfile
 }
 
 interface TableEntry {
@@ -54,22 +95,30 @@ export function findBestMove({
   board,
   stone,
   blockedPositions,
-  timeBudgetMs = 1_000,
-  maxDepth = 8,
+  difficulty = 'easy',
+  timeBudgetMs,
+  maxDepth,
 }: BotRequest): BotResult {
   const startedAt = Date.now()
+  const selectedProfile = BOT_PROFILES[difficulty]
+  const profile = {
+    ...selectedProfile,
+    timeBudgetMs: timeBudgetMs ?? selectedProfile.timeBudgetMs,
+    maxDepth: maxDepth ?? selectedProfile.maxDepth,
+  }
   const position: SearchPosition = { board: [...board], turn: stone, blockedPositions: [...blockedPositions] }
   const context: SearchContext = {
     botStone: stone,
-    deadline: startedAt + Math.max(1, timeBudgetMs),
+    deadline: startedAt + Math.max(1, profile.timeBudgetMs),
     nodes: 0,
     table: new Map(),
+    profile,
   }
-  const initialMoves = orderedMoves(position).slice(0, 24)
+  const initialMoves = orderedMoves(position).slice(0, profile.rootCandidateLimit)
   let bestMove = initialMoves[0] ?? null
   let completedDepth = 0
 
-  for (let depth = 1; depth <= maxDepth && bestMove !== null; depth += 1) {
+  for (let depth = 1; depth <= profile.maxDepth && bestMove !== null; depth += 1) {
     try {
       const result = searchRoot(position, depth, context, bestMove)
       bestMove = result.position
@@ -96,7 +145,7 @@ function searchRoot(
   previousBest: number,
 ) {
   const moves = orderedMoves(position)
-    .slice(0, 24)
+    .slice(0, context.profile.rootCandidateLimit)
     .sort((left, right) => Number(right === previousBest) - Number(left === previousBest))
   let bestMove = moves[0] ?? previousBest
   let bestScore = -Infinity
@@ -147,7 +196,7 @@ function alphaBeta(
       initialAlpha,
       initialBeta,
       ply,
-      TACTICAL_EXTENSION_DEPTH,
+      context.profile.tacticalExtensionDepth,
       context,
     )
   }
@@ -164,7 +213,9 @@ function alphaBeta(
   }
 
   const maximizing = position.turn === context.botStone
-  const candidateLimit = depth >= 4 ? 10 : 14
+  const candidateLimit = depth >= 4
+    ? Math.max(10, context.profile.candidateLimit - 4)
+    : context.profile.candidateLimit
   const moves = orderedMoves(position)
     .slice(0, candidateLimit)
     .sort(
@@ -326,9 +377,44 @@ function tacticalMoves(position: SearchPosition, context: SearchContext) {
       position.blockedPositions,
     )
     if (result.winner) return true
-    return localShapeScore(result.board, move, position.turn) >= 180_000
+    return localShapeScore(result.board, move, position.turn) >= context.profile.threatScore
   }) : []
-  return { moves: forcingMoves.slice(0, 8), forcedLoss: false }
+  if (forcingMoves.length) return { moves: forcingMoves.slice(0, 8), forcedLoss: false }
+
+  if (context.profile.threatScore > OPEN_THREE_THREAT_SCORE || enemyStoneCount < 2) {
+    return { moves: [], forcedLoss: false }
+  }
+
+  const enemyThreats = forcingThreatMoves(position, enemy, context)
+  const defenses = enemyThreats.filter(
+    (move) =>
+      position.board[move] === null && !position.blockedPositions.includes(move),
+  )
+  return { moves: defenses.slice(0, 8), forcedLoss: false }
+}
+
+function forcingThreatMoves(
+  position: SearchPosition,
+  stone: Stone,
+  context: SearchContext,
+) {
+  const threatPosition: SearchPosition = {
+    board: position.board,
+    turn: stone,
+    blockedPositions: stone === position.turn ? position.blockedPositions : [],
+  }
+  return orderedMoves(threatPosition)
+    .slice(0, 18)
+    .filter((move) => {
+      checkDeadline(context)
+      const result = applyLocalMove(
+        threatPosition.board,
+        move,
+        stone,
+        threatPosition.blockedPositions,
+      )
+      return result.winner || localShapeScore(result.board, move, stone) >= OPEN_THREE_THREAT_SCORE
+    })
 }
 
 function immediateWinningMoves(

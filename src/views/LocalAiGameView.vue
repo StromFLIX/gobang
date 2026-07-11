@@ -7,12 +7,30 @@ import AvatarImage from '@/components/AvatarImage.vue'
 import ComicBrand from '@/components/ComicBrand.vue'
 import GridComponent from '@/components/GridComponent.vue'
 import { useSession } from '@/composables/useSession'
-import type { BotRequest, BotResult } from '@/logic/gobangBot'
+import type { BotDifficulty, BotRequest, BotResult } from '@/logic/gobangBot'
 import { applyLocalMove, emptyBoard, opponent } from '@/logic/localGame'
 import type { Player, Stone } from '@/types/game'
 
 const STORAGE_KEY = 'gobang.local-ai-match.v1'
-const BOT_TIME_BUDGET_MS = 1_000
+const BOT_DIFFICULTIES: { value: BotDifficulty; label: string }[] = [
+  { value: 'easy', label: 'Easy' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'hard', label: 'Hard' },
+]
+const DIFFICULTY_COPY: Record<BotDifficulty, { title: string; description: string }> = {
+  easy: {
+    title: 'One-second search',
+    description: 'Fast pattern scoring and alpha-beta search.',
+  },
+  medium: {
+    title: 'Five-second search',
+    description: 'Deeper alpha-beta search and tactical lines.',
+  },
+  hard: {
+    title: 'Five-second threat search',
+    description: 'Deeper search plus open-three attack and defense lines.',
+  },
+}
 const BOT_PLAYER: Player = {
   id: 'local-bot',
   display_name: 'Gobang Bot',
@@ -33,6 +51,7 @@ interface LocalMatch {
   blackCaptures: number
   whiteCaptures: number
   humanStone: Stone
+  difficulty: BotDifficulty
   humanScore: number
   botScore: number
   draws: number
@@ -96,6 +115,7 @@ const winnerPlayer = computed(() => {
   if (!match.value.winner) return null
   return match.value.winner === match.value.humanStone ? humanPlayer.value : BOT_PLAYER
 })
+const difficultyCopy = computed(() => DIFFICULTY_COPY[match.value.difficulty])
 
 onMounted(() => {
   if (match.value.status === 'active' && match.value.turn === botStone.value) scheduleBotTurn()
@@ -172,9 +192,16 @@ function startBotTurn() {
     board: [...match.value.board],
     stone: botStone.value,
     blockedPositions: [...match.value.blockedPositions],
-    timeBudgetMs: BOT_TIME_BUDGET_MS,
+    difficulty: match.value.difficulty,
   }
   botWorker.postMessage(request)
+}
+
+function setDifficulty(difficulty: BotDifficulty) {
+  if (botThinking.value || match.value.difficulty === difficulty) return
+  match.value = { ...match.value, difficulty }
+  lastSearch.value = null
+  persistMatch()
 }
 
 function commitMove(position: number, stone: Stone) {
@@ -253,6 +280,7 @@ function startRound(humanStone: Stone, resetScore: boolean) {
     resetScore ? 0 : match.value.humanScore,
     resetScore ? 0 : match.value.botScore,
     resetScore ? 0 : match.value.draws,
+    match.value.difficulty,
   )
   persistMatch()
   if (match.value.turn === botStone.value) scheduleBotTurn()
@@ -278,7 +306,12 @@ function loadMatch(): LocalMatch {
     ) {
       throw new Error('Invalid local match')
     }
-    return stored
+    return {
+      ...stored,
+      difficulty: BOT_DIFFICULTIES.some(({ value }) => value === stored.difficulty)
+        ? stored.difficulty
+        : 'easy',
+    }
   } catch {
     localStorage.removeItem(STORAGE_KEY)
     return createMatch('black')
@@ -291,6 +324,7 @@ function createMatch(
   humanScore = 0,
   botScore = 0,
   draws = 0,
+  difficulty: BotDifficulty = 'easy',
 ): LocalMatch {
   return {
     version: 1,
@@ -303,6 +337,7 @@ function createMatch(
     blackCaptures: 0,
     whiteCaptures: 0,
     humanStone,
+    difficulty,
     humanScore,
     botScore,
     draws,
@@ -435,6 +470,19 @@ function createMatch(
               Bot <strong>{{ match.botScore }}</strong>
               <span v-if="match.draws">· {{ match.draws }} draw{{ match.draws === 1 ? '' : 's' }}</span>
             </p>
+            <div class="segmented-control bot-difficulty" aria-label="Bot difficulty">
+              <button
+                v-for="difficulty in BOT_DIFFICULTIES"
+                :key="difficulty.value"
+                type="button"
+                :class="{ active: match.difficulty === difficulty.value }"
+                :aria-pressed="match.difficulty === difficulty.value"
+                :disabled="botThinking"
+                @click="setDifficulty(difficulty.value)"
+              >
+                {{ difficulty.label }}
+              </button>
+            </div>
             <div v-if="botThinking" class="bot-thinking-bar" aria-hidden="true"><i /></div>
             <p v-else-if="lastSearch" class="bot-search-detail">
               Depth {{ lastSearch.depth }} · {{ lastSearch.elapsedMs }} ms
@@ -453,8 +501,8 @@ function createMatch(
             <p class="section-kicker">Local match</p>
             <div class="quick-rules">
               <p>
-                <strong>One-second search</strong>
-                Pattern scoring and alpha-beta run on this device.
+                <strong>{{ difficultyCopy.title }}</strong>
+                {{ difficultyCopy.description }}
               </p>
               <p>
                 <strong>No Elo</strong>
