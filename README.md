@@ -250,7 +250,7 @@ Production uses three Dockerfile Applications in the same project, environment, 
 
 Do not add host port mappings, fixed IP addresses, custom internal names, or consistent container names to `gobang-app` or `gobang-edge`. Coolify can then start a versioned replacement, wait for its health check, and remove the old container after the new one is healthy. Keep auto-deploy disabled until this rolling behavior has been validated on the destination.
 
-PocketBase is stateful and must not run overlapping writable containers. Mount one persistent volume at `/pb/pb_data`, stop PocketBase before replacing its container, and keep deployments manual. Take and restore-test a stopped-volume snapshot before migrations or infrastructure changes. Never mount the same PocketBase volume into two running containers.
+PocketBase is stateful and must not run overlapping writable containers. Mount one persistent volume at `/pb/pb_data`, stop PocketBase before replacing its container, and keep deployments manual. Take and restore-test a stopped-volume snapshot before migrations or infrastructure changes. Never mount the same PocketBase volume into two running containers. 
 
 Configure environments by ownership:
 
