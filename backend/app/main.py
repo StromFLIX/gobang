@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from app.api import (
+    app_links,
     auth,
     games,
     invitations,
@@ -109,6 +110,7 @@ def create_app(
         allow_headers=["Authorization", "Content-Type", "X-Legal-Reveal"],
     )
     application.include_router(auth.router)
+    application.include_router(app_links.router)
     application.include_router(games.router)
     application.include_router(invitations.router)
     application.include_router(reactions.router)

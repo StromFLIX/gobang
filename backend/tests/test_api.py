@@ -253,6 +253,28 @@ def test_legal_address_requires_deliberate_uncached_reveal() -> None:
     assert response.headers["x-robots-tag"] == "noindex, nofollow, noarchive, nosnippet"
 
 
+def test_android_asset_links_match_release_package_and_certificate() -> None:
+    with make_client() as client:
+        response = client.get("/.well-known/assetlinks.json")
+
+    assert response.status_code == 200
+    assert response.history == []
+    assert response.headers["content-type"] == "application/json"
+    assert response.headers["cache-control"] == "public, max-age=3600"
+    assert response.json() == [
+        {
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {
+                "namespace": "android_app",
+                "package_name": "com.stromflix.gobang",
+                "sha256_cert_fingerprints": [
+                    "04:3F:9D:9A:92:E2:40:7A:F0:A3:46:B0:5B:3D:4C:72:47:C7:D7:95:BE:55:2C:75:1B:A7:13:3F:CD:7B:25:BC"
+                ],
+            },
+        }
+    ]
+
+
 def test_legal_address_fails_closed_when_not_configured() -> None:
     with make_client(settings=Settings(frontend_dist="missing")) as client:
         response = client.post(

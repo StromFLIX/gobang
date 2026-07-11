@@ -26,6 +26,7 @@ import ReactionBar from '@/components/ReactionBar.vue'
 import { useInvitations } from '@/composables/useInvitations'
 import { usePresence } from '@/composables/usePresence'
 import { useSession } from '@/composables/useSession'
+import { publicAppUrl } from '@/logic/platform'
 import { AVATAR_PRESETS } from '@/logic/avatar'
 import { shortPlayerId } from '@/logic/games'
 import { ApiError, api } from '@/services/api'
@@ -353,7 +354,7 @@ async function playMove(position: number) {
 }
 
 async function shareRoom() {
-  const url = window.location.href
+  const url = publicAppUrl(`/game/${encodeURIComponent(inviteCode.value)}`)
   try {
     if (navigator.share) await navigator.share({ title: 'Gobang game', url })
     else {

@@ -102,6 +102,31 @@ The backend registers each signed-in installation in `push_devices` and sends no
 
 The app includes no billing, advertising, analytics, backup, contacts, storage, or location integration. Its Android permissions are limited to network access and those required by FCM. FCM necessarily processes the installation token and notification payload to deliver background notifications; gameplay and profile data are not sent to advertising or analytics providers.
 
+### Android App Links
+
+Game sharing always emits a canonical `https://gobang.stromflix.com/game/<invite-code>` URL, including from the Capacitor app. Android declares verified App Links for that HTTPS host and path, and the Vue router handles both cold launches and links received while the app is already open. Other hosts, HTTP links, and non-game paths are rejected by the native link handler.
+
+The backend serves `/.well-known/assetlinks.json` with package ID `com.stromflix.gobang`. Its default certificate is the SHA-256 fingerprint of the signing certificate on the current direct-download `android-latest` APK:
+
+```text
+04:3F:9D:9A:92:E2:40:7A:F0:A3:46:B0:5B:3D:4C:72:47:C7:D7:95:BE:55:2C:75:1B:A7:13:3F:CD:7B:25:BC
+```
+
+If Google Play App Signing is enabled, copy the **App signing certificate** SHA-256 fingerprint from Play Console's **App integrity** page and set `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS` in Coolify to both fingerprints, comma-separated. Use the app-signing fingerprint, not only the upload certificate. This backend setting can be changed without rebuilding Android.
+
+Deploy the backend first and verify that `https://gobang.stromflix.com/.well-known/assetlinks.json` returns HTTP 200, JSON without a redirect, the package ID, and every active signing fingerprint. Then distribute an Android update containing the new intent filter. Existing installed versions cannot claim App Links until they are updated.
+
+On a connected Android device, force and inspect verification with:
+
+```sh
+adb shell pm verify-app-links --re-verify com.stromflix.gobang
+adb shell pm get-app-links com.stromflix.gobang
+adb shell am start -a android.intent.action.VIEW \
+	-d 'https://gobang.stromflix.com/game/VALID-INVITE-CODE'
+```
+
+The domain should report `verified`. A user can still disable supported-link opening in Android's per-app settings; the app cannot override that preference.
+
 ### Google Play readiness
 
 The Android project targets API 36, uses a monotonically increasing CI version code, produces a signed Android App Bundle, has production launcher and notification assets, disables cleartext traffic and device backup, and includes an in-app account-deletion flow. The public compliance routes are:
@@ -123,7 +148,6 @@ These values are public and are embedded into both the website and Android build
 - `LEGAL_OPERATOR_NAME`: full legal name of the individual or organization operating Gobang
 - `LEGAL_COUNTRY`: country of establishment
 - `LEGAL_EMAIL`: monitored privacy and legal contact address
-- `LEGAL_PHONE`: public contact number when supplied
 - `LEGAL_HOSTING_PROVIDER`: legal names of the VPS infrastructure providers
 - `LEGAL_HOSTING_LOCATION`: countries where the Gobang API and PocketBase data are hosted
 

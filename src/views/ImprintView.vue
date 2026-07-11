@@ -47,9 +47,6 @@ import { hasCompleteLegalOperator, legalOperator, missingLegalOperatorFields } f
         <p v-if="legalOperator.email">
           Email: <a :href="`mailto:${legalOperator.email}`">{{ legalOperator.email }}</a>
         </p>
-        <p v-if="legalOperator.phone">
-          Phone: <a :href="`tel:${legalOperator.phone}`">{{ legalOperator.phone }}</a>
-        </p>
       </section>
 
       <section v-if="legalOperator.registerEntry || legalOperator.vatId">
