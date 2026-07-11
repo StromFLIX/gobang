@@ -6,6 +6,12 @@
 :80 {
 	encode zstd gzip
 
+	@pocketbase_oauth_success path /pb/_/
+	handle @pocketbase_oauth_success {
+		header Content-Type "text/html; charset=utf-8"
+		respond "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Google sign-in complete</title></head><body><main><h1>Sign-in complete</h1><p>You can return to Gobang.</p></main></body></html>" 200
+	}
+
 	@pocketbase_admin path /pb/_* /pb/api/backups* /pb/api/collections /pb/api/settings*
 	handle @pocketbase_admin {
 		respond 404

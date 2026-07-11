@@ -176,6 +176,7 @@ async function runGoogleAuth(
         : undefined,
     )
     oauthComplete = true
+    if (isNativeApp) await Browser.close()
     return result
   } catch (authError) {
     setRealtimeToken(activeToken)
