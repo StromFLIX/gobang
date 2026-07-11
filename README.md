@@ -257,11 +257,11 @@ Configure environments by ownership:
 - PocketBase runtime: `PB_SUPERUSER_*`, `PB_APP_*`, `PB_MAIL_*`, `PB_SMTP_*`, and `PB_GOOGLE_*`.
 - App runtime: `POCKETBASE_URL=http://gobang-pocketbase:8090`, `PB_SUPERUSER_*`, `FRONTEND_DIST=/app/frontend_dist`, `FIREBASE_CREDENTIALS_JSON`, `LEGAL_STREET_ADDRESS`, `LEGAL_POSTAL_CITY`, and `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS`.
 - App build time only: the seven `VITE_LEGAL_*` values consumed by the root Dockerfile.
-- Edge runtime: `APP_UPSTREAM=gobang-app:8000` and `POCKETBASE_UPSTREAM=gobang-pocketbase:8090`.
+- Edge runtime: `APP_UPSTREAM=gobang-app` and `POCKETBASE_UPSTREAM=gobang-pocketbase`.
 
 Only `gobang-edge` receives domains. TLS terminates at Coolify, then Caddy preserves same-origin `/api` and `/pb` routing, PocketBase realtime streaming, OAuth redirects, and the protected PocketBase administration routes. Assigning a domain to the app or PocketBase bypasses those controls.
 
-The compatibility aliases `app` and `pocketbase` allow an edge image from before the configurable-upstream change to reach the split Applications during migration. New deployments should use the explicit `gobang-*` aliases through the edge environment variables.
+The compatibility aliases `app` and `pocketbase` provide the local Caddy defaults. Production uses the explicit `gobang-*` aliases through the edge environment variables. Caddy resolves these aliases dynamically through Docker DNS so rolling app replacements do not leave an edge container pinned to a removed container IP.
 
 For the legacy Compose deployment, keep services only on Compose's Coolify-managed resource network. Adding another network makes Caddy multi-homed and can cause Traefik to select an unreachable container address. Local development continues to use Compose's default network and the Caddy upstream defaults.
 
