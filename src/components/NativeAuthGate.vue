@@ -88,6 +88,15 @@ async function submit() {
         </button>
       </div>
 
+      <GoogleSignInButton
+        :display-name="displayName"
+        :avatar-seed="avatarSeed"
+        :disabled="busy"
+        :label="mode === 'register' ? 'Sign up with Google' : 'Sign in with Google'"
+        divider-after
+        divider-label="or use email and password"
+      />
+
       <form class="auth-form" @submit.prevent="submit">
         <template v-if="mode === 'register'">
           <label class="field-label" for="native-display-name">Player name</label>
@@ -145,11 +154,6 @@ async function submit() {
           {{ mode === 'login' ? 'Sign in' : 'Create account' }}
         </button>
       </form>
-      <GoogleSignInButton
-        :display-name="displayName"
-        :avatar-seed="avatarSeed"
-        :disabled="busy"
-      />
       <nav class="native-auth-legal" aria-label="Account and privacy information">
         <RouterLink to="/privacy">Privacy</RouterLink>
         <RouterLink to="/account-deletion">Delete account</RouterLink>
@@ -198,7 +202,7 @@ async function submit() {
 }
 
 .native-auth-panel .auth-form {
-  padding-top: 0;
+  padding-top: 0.75rem;
 }
 
 .native-auth-panel .button--primary {

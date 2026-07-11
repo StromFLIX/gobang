@@ -46,6 +46,28 @@ describe('GoogleSignInButton', () => {
     expect(wrapper.emitted('authenticated')).toEqual([[true, 'google-token']])
   })
 
+  it('shows the branded Google choice before the email alternative', async () => {
+    hasGoogleAuth.mockResolvedValue(true)
+    const wrapper = mount(GoogleSignInButton, {
+      props: {
+        ...baseProps,
+        label: 'Sign up with Google',
+        dividerAfter: true,
+        dividerLabel: 'or use email and password',
+      },
+    })
+    await flushPromises()
+
+    const option = wrapper.get('.google-auth-option')
+    expect(option.get('button').text()).toBe('Sign up with Google')
+    expect(option.get('.google-mark').findAll('path')).toHaveLength(4)
+    expect(option.get('.auth-divider').text()).toBe('or use email and password')
+    expect(Array.from(option.element.children).map((child) => child.tagName)).toEqual([
+      'BUTTON',
+      'DIV',
+    ])
+  })
+
   it('reauthenticates the expected player for account deletion', async () => {
     hasGoogleAuth.mockResolvedValue(true)
     reauthenticateWithGoogle.mockResolvedValue('proof-token')

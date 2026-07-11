@@ -11,10 +11,13 @@ const props = withDefaults(defineProps<{
   expectedPlayerId?: string
   label?: string
   showDivider?: boolean
+  dividerAfter?: boolean
+  dividerLabel?: string
   danger?: boolean
   mergeGuestProgress?: boolean
 }>(), {
   mergeGuestProgress: true,
+  showDivider: true,
 })
 
 const emit = defineEmits<{
@@ -26,7 +29,7 @@ const available = ref(false)
 const busy = ref(false)
 const error = ref('')
 const buttonLabel = computed(() =>
-  busy.value ? 'Connecting to Google...' : (props.label ?? 'Continue with Google'),
+  busy.value ? 'Connecting to Google...' : (props.label ?? 'Sign in with Google'),
 )
 
 onMounted(async () => {
@@ -63,18 +66,44 @@ function isCancellation(reason: unknown) {
 </script>
 
 <template>
-  <div v-if="available" class="google-auth-option">
-    <div v-if="showDivider !== false" class="auth-divider"><span>or</span></div>
+  <div
+    v-if="available"
+    :class="['google-auth-option', { 'google-auth-option--first': dividerAfter }]"
+  >
+    <div v-if="showDivider !== false && !dividerAfter" class="auth-divider">
+      <span>{{ dividerLabel ?? 'or' }}</span>
+    </div>
     <button
       type="button"
       :class="['google-auth-button', { 'google-auth-button--danger': danger }]"
       :disabled="disabled || busy"
       @click="authenticate"
     >
-      <span class="google-mark" aria-hidden="true">G</span>
-      {{ buttonLabel }}
+      <svg class="google-mark" aria-hidden="true" viewBox="0 0 18 18">
+        <path
+          fill="#4285f4"
+          d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.715v2.258h2.909c1.702-1.567 2.684-3.874 2.684-6.614Z"
+        />
+        <path
+          fill="#34a853"
+          d="M9 18c2.43 0 4.468-.806 5.956-2.181l-2.909-2.258c-.806.54-1.835.859-3.047.859-2.344 0-4.328-1.585-5.037-3.715H.956v2.332A9 9 0 0 0 9 18Z"
+        />
+        <path
+          fill="#fbbc05"
+          d="M3.963 10.705A5.41 5.41 0 0 1 3.682 9c0-.592.102-1.168.281-1.705V4.963H.956A9 9 0 0 0 0 9c0 1.452.347 2.827.956 4.037l3.007-2.332Z"
+        />
+        <path
+          fill="#ea4335"
+          d="M9 3.58c1.321 0 2.507.454 3.441 1.346l2.581-2.58C13.464.891 11.427 0 9 0A9 9 0 0 0 .956 4.963l3.007 2.332C4.672 5.165 6.656 3.58 9 3.58Z"
+        />
+      </svg>
+      <span class="google-button-label">{{ buttonLabel }}</span>
+      <span class="google-button-spacer" aria-hidden="true"></span>
     </button>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+    <div v-if="showDivider !== false && dividerAfter" class="auth-divider">
+      <span>{{ dividerLabel ?? 'or' }}</span>
+    </div>
   </div>
 </template>
 
@@ -85,15 +114,18 @@ function isCancellation(reason: unknown) {
   margin-top: 1rem;
 }
 
+.google-auth-option--first {
+  margin-top: 0;
+}
+
 .auth-divider {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(1.5rem, 1fr) auto minmax(1.5rem, 1fr);
   gap: 0.65rem;
   align-items: center;
   color: var(--color-text-muted);
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .auth-divider::before,
@@ -104,27 +136,30 @@ function isCancellation(reason: unknown) {
 }
 
 .google-auth-button {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 1.125rem minmax(0, 1fr) 1.125rem;
   width: 100%;
-  min-height: 2.85rem;
+  min-height: 2.75rem;
   align-items: center;
-  justify-content: center;
-  gap: 0.65rem;
-  padding: 0.65rem 0.9rem;
-  border: 1px solid var(--color-border);
-  border-radius: 5px;
-  color: var(--color-text);
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #747775;
+  border-radius: 4px;
+  color: #1f1f1f;
   background: #fff;
-  font: inherit;
-  font-weight: 800;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0;
   cursor: pointer;
 }
 
 .google-auth-button:hover:not(:disabled),
 .google-auth-button:focus-visible {
-  border-color: var(--color-green);
+  border-color: #747775;
+  background: #f8faff;
   outline: none;
-  box-shadow: 0 0 0 3px rgba(36, 102, 70, 0.1);
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
 }
 
 .google-auth-button:disabled {
@@ -144,15 +179,14 @@ function isCancellation(reason: unknown) {
 }
 
 .google-mark {
-  display: grid;
-  width: 1.35rem;
-  height: 1.35rem;
-  place-items: center;
-  border-radius: 50%;
-  color: #fff;
-  background: #4285f4;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 0.86rem;
-  font-weight: 700;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.google-button-label {
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

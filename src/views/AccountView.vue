@@ -243,7 +243,7 @@ async function confirmGoogleDelete(_isNew: boolean, googleToken: string) {
         <div>
           <p class="section-kicker">Player account</p>
           <h1 id="account-page-title">{{ player.display_name }}</h1>
-          <p>
+          <p class="account-access-choice">
             {{
               player.is_guest
                 ? 'This player currently lives on this device.'
@@ -303,11 +303,27 @@ async function confirmGoogleDelete(_isNew: boolean, googleToken: string) {
         <div class="account-page-section__heading">
           <p class="section-kicker">Account access</p>
           <h2 id="access-title">{{ mode === 'register' ? 'Create account' : 'Sign in' }}</h2>
+          <p>
+            {{
+              mode === 'register'
+                ? 'Choose Google or use email and password to create your account.'
+                : 'Choose Google or use your email and password.'
+            }}
+          </p>
           <p v-if="mode === 'register' && guestGameCount">
             Your current {{ guestGameLabel }} will stay with the new account.
           </p>
         </div>
         <div class="account-page-auth">
+          <GoogleSignInButton
+            :display-name="displayName"
+            :avatar-seed="avatarSeed"
+            :disabled="busy"
+            :label="mode === 'register' ? 'Sign up with Google' : 'Sign in with Google'"
+            divider-after
+            divider-label="or use email and password"
+            @authenticated="notice = 'Signed in with Google.'"
+          />
           <form class="account-page-form" @submit.prevent="submitAuth">
             <template v-if="mode === 'register'">
               <label class="field-label" for="register-display-name">Player name</label>
@@ -361,12 +377,6 @@ async function confirmGoogleDelete(_isNew: boolean, googleToken: string) {
               {{ mode === 'register' ? 'Create account' : 'Sign in' }}
             </button>
           </form>
-          <GoogleSignInButton
-            :display-name="displayName"
-            :avatar-seed="avatarSeed"
-            :disabled="busy"
-            @authenticated="notice = 'Signed in with Google.'"
-          />
         </div>
       </section>
 
@@ -565,7 +575,14 @@ async function confirmGoogleDelete(_isNew: boolean, googleToken: string) {
 }
 
 .account-page-auth {
+  display: grid;
+  gap: 1rem;
   min-width: 0;
+}
+
+.account-access-choice {
+  color: var(--color-text-muted);
+  line-height: 1.55;
 }
 
 .account-page-form .button,
