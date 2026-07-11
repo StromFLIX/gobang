@@ -68,6 +68,13 @@ async def resign_game(
     return GameResponse.from_domain(await service.resign(game_id, player.id))
 
 
+@router.delete("/{game_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def dismiss_game(
+    game_id: str, player: CurrentPlayer, service: GameServiceDependency
+) -> None:
+    await service.dismiss(game_id, player.id)
+
+
 @router.put("/{game_id}/rematch", response_model=GameResponse)
 async def set_rematch(
     game_id: str,

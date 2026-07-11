@@ -65,6 +65,7 @@ const leaderboard = ref<Leaderboard | null>(null)
 const leaderboardLoading = ref(false)
 const leaderboardError = ref('')
 const busy = ref(false)
+const deletingGameIds = ref<string[]>([])
 const pageError = ref('')
 const profileSaving = ref(false)
 const accountMenuOpen = ref(false)
@@ -451,6 +452,28 @@ function groupSummary(group: OpponentGameGroup) {
   const gamesLabel = count === 1 ? '1 game' : `${count} games together`
   return `${gamesLabel} · Round ${gameFor(group).round}`
 }
+
+async function dismissGames(selectedGames: Game[]) {
+  const active = selectedGames.some((game) => game.status === 'active')
+  if (
+    active &&
+    !window.confirm('This match is still running. Removing it will resign the game. Continue?')
+  ) {
+    return
+  }
+  const gameIds = selectedGames.map((game) => game.id)
+  deletingGameIds.value = [...deletingGameIds.value, ...gameIds]
+  pageError.value = ''
+  try {
+    for (const gameId of gameIds) await api.dismissGame(gameId)
+    games.value = games.value.filter((game) => !gameIds.includes(game.id))
+    await loadLeaderboard()
+  } catch (error) {
+    pageError.value = error instanceof ApiError ? error.message : 'Could not remove the game.'
+  } finally {
+    deletingGameIds.value = deletingGameIds.value.filter((gameId) => !gameIds.includes(gameId))
+  }
+}
 </script>
 
 <template>
@@ -461,16 +484,17 @@ function groupSummary(group: OpponentGameGroup) {
       </RouterLink>
 
       <div v-if="ready && player" class="account-summary">
-        <InvitationInbox
-          v-if="!player.is_guest"
-          :invitations="invitations"
-          :player-id="player.id"
-          :loading="invitationsLoading"
-          :error="invitationsError"
-          @accept="acceptChallenge"
-          @dismiss="dismissChallenge"
-        />
         <div ref="accountMenuRef" class="account-menu-wrap">
+          <InvitationInbox
+            v-if="!player.is_guest"
+            compact
+            :invitations="invitations"
+            :player-id="player.id"
+            :loading="invitationsLoading"
+            :error="invitationsError"
+            @accept="acceptChallenge"
+            @dismiss="dismissChallenge"
+          />
           <button
             type="button"
             class="account-avatar-button"
@@ -537,7 +561,7 @@ function groupSummary(group: OpponentGameGroup) {
           </p>
 
           <div v-if="!hasPlayerName" class="lobby-player-setup">
-            <AvatarImage :seed="avatarSeed" size="small" />
+            <AvatarImage :seed="avatarSeed" size="large" />
             <div>
               <label class="field-label" for="lobby-player-name">Your player name</label>
               <input
@@ -665,48 +689,69 @@ function groupSummary(group: OpponentGameGroup) {
         </div>
 
         <div v-if="waitingGames.length || visibleOpponentGroups.length" class="game-list">
-          <RouterLink
+          <div
             v-for="game in waitingGames"
             :key="game.id"
-            :to="`/game/${game.invite_code}`"
             class="game-list-item"
           >
-            <span class="waiting-game-avatar"><Users :size="18" /></span>
-            <div class="game-list-item__identity">
-              <strong>Waiting for a player</strong>
-              <span>Game ready to share</span>
-            </div>
-            <span class="game-presence">
-              <i class="presence-dot presence-dot--waiting" />
-              Waiting
-            </span>
-            <ArrowRight :size="18" />
-          </RouterLink>
+            <RouterLink :to="`/game/${game.invite_code}`" class="game-list-item__link">
+              <span class="waiting-game-avatar"><Users :size="18" /></span>
+              <div class="game-list-item__identity">
+                <strong>Waiting for a player</strong>
+                <span>Game ready to share</span>
+              </div>
+              <span class="game-presence">
+                <i class="presence-dot presence-dot--waiting" />
+                Waiting
+              </span>
+              <ArrowRight :size="18" />
+            </RouterLink>
+            <button
+              type="button"
+              class="icon-button game-list-item__delete"
+              title="Remove game"
+              aria-label="Remove waiting game"
+              :disabled="deletingGameIds.includes(game.id)"
+              @click="dismissGames([game])"
+            ><Trash2 :size="17" /></button>
+          </div>
 
-          <RouterLink
+          <div
             v-for="group in visibleOpponentGroups"
             :key="group.opponent.id"
-            :to="`/game/${gameFor(group).invite_code}`"
             class="game-list-item"
           >
-            <AvatarImage :seed="group.opponent.avatar_seed" size="small" />
-            <div class="game-list-item__identity">
-              <strong>{{ group.opponent.display_name }}</strong>
-              <small>{{ shortPlayerId(group.opponent.id) }}</small>
-              <span>{{ groupSummary(group) }}</span>
-            </div>
-            <span class="game-presence">
-              <i
-                :class="[
-                  'presence-dot',
-                  `presence-dot--${gameSignal(group).tone}`,
-                  { 'presence-dot--pulse': gameSignal(group).pulse },
-                ]"
-              />
-              {{ gameSignal(group).label }}
-            </span>
-            <ArrowRight :size="18" />
-          </RouterLink>
+            <RouterLink
+              :to="`/game/${gameFor(group).invite_code}`"
+              class="game-list-item__link"
+            >
+              <AvatarImage :seed="group.opponent.avatar_seed" size="small" />
+              <div class="game-list-item__identity">
+                <strong>{{ group.opponent.display_name }}</strong>
+                <small>{{ shortPlayerId(group.opponent.id) }}</small>
+                <span>{{ groupSummary(group) }}</span>
+              </div>
+              <span class="game-presence">
+                <i
+                  :class="[
+                    'presence-dot',
+                    `presence-dot--${gameSignal(group).tone}`,
+                    { 'presence-dot--pulse': gameSignal(group).pulse },
+                  ]"
+                />
+                {{ gameSignal(group).label }}
+              </span>
+              <ArrowRight :size="18" />
+            </RouterLink>
+            <button
+              type="button"
+              class="icon-button game-list-item__delete"
+              :title="`Remove games with ${group.opponent.display_name}`"
+              :aria-label="`Remove games with ${group.opponent.display_name}`"
+              :disabled="group.games.some((game) => deletingGameIds.includes(game.id))"
+              @click="dismissGames(group.games)"
+            ><Trash2 :size="17" /></button>
+          </div>
         </div>
         <p v-else class="empty-game-list">No opponents yet. Create or join a game above.</p>
 

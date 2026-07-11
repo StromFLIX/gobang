@@ -61,6 +61,8 @@ class Game:
     host_rematch: bool = False
     guest_rematch: bool = False
     round_results: list[RoundResult] = field(default_factory=list)
+    hidden_by_ids: tuple[str, ...] = ()
+    updated_at: datetime | None = None
 
     def player_ids(self) -> tuple[str, ...]:
         if self.guest is None:

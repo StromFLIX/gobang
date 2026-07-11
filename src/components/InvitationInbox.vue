@@ -10,6 +10,7 @@ const props = defineProps<{
   playerId: string
   loading: boolean
   error: string
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -32,7 +33,7 @@ function accept(invitationId: string) {
 </script>
 
 <template>
-  <div class="invitation-inbox">
+  <div :class="['invitation-inbox', { 'invitation-inbox--compact': compact }]">
     <button
       type="button"
       class="icon-button icon-button--muted invitation-trigger"
@@ -120,6 +121,41 @@ function accept(invitationId: string) {
 
 .invitation-trigger {
   position: relative;
+}
+
+.invitation-inbox--compact {
+  position: absolute;
+  z-index: 2;
+  top: -0.25rem;
+  right: -0.25rem;
+}
+
+.invitation-inbox--compact .invitation-trigger {
+  width: 1.35rem;
+  height: 1.35rem;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--color-green);
+}
+
+.invitation-inbox--compact .invitation-trigger svg {
+  width: 0.72rem;
+  height: 0.72rem;
+}
+
+.invitation-inbox--compact .invitation-badge {
+  top: -0.55rem;
+  right: -0.55rem;
+  animation: invitation-pulse 1.2s ease-in-out infinite;
+}
+
+.invitation-inbox--compact .invitation-popover {
+  top: calc(100% + 0.8rem);
+}
+
+@keyframes invitation-pulse {
+  50% { box-shadow: 0 0 0 5px rgba(181, 53, 47, 0.18); }
 }
 
 .invitation-badge {

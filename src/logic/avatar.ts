@@ -1,49 +1,45 @@
+import { createAvatar } from '@dicebear/core'
+import { openPeeps } from '@dicebear/collection'
+
 export const AVATAR_PRESETS = ['nova', 'miso', 'pepper', 'fig', 'maple', 'pixel'] as const
 
-export const HAIR_OPTIONS = [
-  { value: 'afro', label: 'Afro' },
-  { value: 'bangs', label: 'Bangs' },
-  { value: 'bantuKnots', label: 'Bantu knots' },
-  { value: 'bun', label: 'Bun' },
-  { value: 'cornrows', label: 'Cornrows' },
-  { value: 'dreads1', label: 'Dreads' },
-  { value: 'flatTop', label: 'Flat top' },
-  { value: 'longCurly', label: 'Long curls' },
-  { value: 'medium1', label: 'Medium' },
-  { value: 'mohawk', label: 'Mohawk' },
-  { value: 'short2', label: 'Short' },
-  { value: 'twists2', label: 'Twists' },
-] as const
+function avatarOptions<const Values extends readonly string[]>(values: Values) {
+  return values.map((value) => ({
+    value,
+    label: value
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/([A-Za-z])(\d+)/g, '$1 $2')
+      .replace(/^./, (character) => character.toUpperCase()),
+  })) as { value: Values[number]; label: string }[]
+}
 
-export const FACE_OPTIONS = [
-  { value: 'calm', label: 'Calm' },
-  { value: 'cheeky', label: 'Cheeky' },
-  { value: 'cute', label: 'Cute' },
-  { value: 'driven', label: 'Focused' },
-  { value: 'lovingGrin1', label: 'Grinning' },
-  { value: 'serious', label: 'Serious' },
-  { value: 'smile', label: 'Smile' },
-  { value: 'smileBig', label: 'Big smile' },
-] as const
+export const HAIR_OPTIONS = avatarOptions([
+  'afro', 'bangs', 'bantuKnots', 'bun', 'cornrows', 'dreads1', 'flatTop', 'longCurly',
+  'medium1', 'mohawk', 'short2', 'twists2', 'bangs2', 'bear', 'bun2', 'buns',
+  'cornrows2', 'dreads2', 'flatTopLong', 'grayBun', 'grayMedium', 'grayShort', 'hatBeanie',
+  'hatHip', 'hijab', 'long', 'longAfro', 'longBangs', 'medium2', 'medium3', 'mediumBangs',
+  'mediumBangs2', 'mediumBangs3', 'mediumStraight', 'mohawk2', 'noHair1', 'noHair2',
+  'noHair3', 'pomp', 'shaved1', 'shaved2', 'shaved3', 'short1', 'short3', 'short4',
+  'short5', 'turban', 'twists',
+] as const)
 
-export const ACCESSORY_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'eyepatch', label: 'Eyepatch' },
-  { value: 'glasses', label: 'Round glasses' },
-  { value: 'glasses2', label: 'Wire glasses' },
-  { value: 'glasses3', label: 'Square glasses' },
-  { value: 'glasses5', label: 'Small glasses' },
-  { value: 'sunglasses', label: 'Sunglasses' },
-] as const
+export const FACE_OPTIONS = avatarOptions([
+  'calm', 'cheeky', 'cute', 'driven', 'lovingGrin1', 'serious', 'smile', 'smileBig',
+  'angryWithFang', 'awe', 'blank', 'concerned', 'concernedFear', 'contempt', 'cyclops',
+  'eatingHappy', 'explaining', 'eyesClosed', 'fear', 'hectic', 'lovingGrin2', 'monster',
+  'old', 'rage', 'smileLOL', 'smileTeethGap', 'solemn', 'suspicious', 'tired', 'veryAngry',
+] as const)
 
-export const FACIAL_HAIR_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'chin', label: 'Chin beard' },
-  { value: 'full', label: 'Full beard' },
-  { value: 'goatee1', label: 'Goatee' },
-  { value: 'moustache1', label: 'Moustache' },
-  { value: 'moustache4', label: 'Curled moustache' },
-] as const
+export const ACCESSORY_OPTIONS = avatarOptions([
+  'none', 'eyepatch', 'glasses', 'glasses2', 'glasses3', 'glasses5', 'sunglasses',
+  'glasses4', 'sunglasses2',
+] as const)
+
+export const FACIAL_HAIR_OPTIONS = avatarOptions([
+  'none', 'chin', 'full', 'goatee1', 'moustache1', 'moustache4', 'full2', 'full3', 'full4',
+  'goatee2', 'moustache2', 'moustache3', 'moustache5', 'moustache6', 'moustache7',
+  'moustache8', 'moustache9',
+] as const)
 
 export const SKIN_OPTIONS = [
   { value: 'ffdbb4', label: 'Light' },
@@ -51,6 +47,7 @@ export const SKIN_OPTIONS = [
   { value: 'd08b5b', label: 'Medium' },
   { value: 'ae5d29', label: 'Deep' },
   { value: '614335', label: 'Dark' },
+  { value: '694d3d', label: 'Deep brown' },
 ] as const
 
 export const SHIRT_OPTIONS = [
@@ -60,6 +57,7 @@ export const SHIRT_OPTIONS = [
   { value: '9ddadb', label: 'Aqua' },
   { value: '8fa7df', label: 'Blue' },
   { value: 'e279c7', label: 'Pink' },
+  { value: 'fdea6b', label: 'Yellow' },
 ] as const
 
 type OptionValue<T extends readonly { value: string }[]> = T[number]['value']
@@ -74,12 +72,6 @@ export interface AvatarConfig {
 }
 
 const CUSTOM_AVATAR_PATTERN = /^av1-(\d+)-(\d+)-(\d+)-(\d+)-(\d+)-(\d+)$/
-
-function hash(value: string) {
-  let result = 0
-  for (const character of value) result = (result * 31 + character.charCodeAt(0)) >>> 0
-  return result
-}
 
 function optionAt<T extends readonly { value: string }[]>(options: T, index: number) {
   return options[index % options.length].value as OptionValue<T>
@@ -107,15 +99,21 @@ export function decodeAvatar(value: string): AvatarConfig {
     }
   }
 
-  const base = hash(value)
+  const details = createAvatar(openPeeps, { seed: value }).toJson().extra
+  const detail = (name: string) =>
+    typeof details[name] === 'string' ? details[name] : undefined
   return {
-    hair: optionAt(HAIR_OPTIONS, base),
-    face: optionAt(FACE_OPTIONS, base >>> 3),
-    accessory: optionAt(ACCESSORY_OPTIONS, base >>> 6),
-    facialHair: optionAt(FACIAL_HAIR_OPTIONS, base >>> 9),
-    skin: optionAt(SKIN_OPTIONS, base >>> 12),
-    shirt: optionAt(SHIRT_OPTIONS, base >>> 15),
+    hair: optionValue(HAIR_OPTIONS, detail('head')),
+    face: optionValue(FACE_OPTIONS, detail('face')),
+    accessory: optionValue(ACCESSORY_OPTIONS, detail('accessories') ?? 'none'),
+    facialHair: optionValue(FACIAL_HAIR_OPTIONS, detail('facialHair') ?? 'none'),
+    skin: optionValue(SKIN_OPTIONS, detail('skinColor')?.replace('#', '')),
+    shirt: optionValue(SHIRT_OPTIONS, detail('clothingColor')?.replace('#', '')),
   }
+}
+
+function optionValue<T extends readonly { value: string }[]>(options: T, value?: string) {
+  return (options.find((option) => option.value === value)?.value ?? options[0].value) as OptionValue<T>
 }
 
 export function encodeAvatar(config: AvatarConfig) {

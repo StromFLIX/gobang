@@ -112,6 +112,7 @@ export const api = {
     request<GameReaction>(`/api/games/${gameId}/reactions`, json('POST', { kind })),
   cancelGame: (gameId: string) => request<Game>(`/api/games/${gameId}/cancel`, json('POST')),
   resignGame: (gameId: string) => request<Game>(`/api/games/${gameId}/resign`, json('POST')),
+  dismissGame: (gameId: string) => request<void>(`/api/games/${gameId}`, json('DELETE')),
   setRematch: (gameId: string, ready: boolean) =>
     request<Game>(`/api/games/${gameId}/rematch`, json('PUT', { ready })),
   registerPushDevice: (token: string) =>

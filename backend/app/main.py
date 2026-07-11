@@ -1,5 +1,7 @@
+import asyncio
+import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -56,6 +58,8 @@ from app.services.push import (
 )
 from app.services.reactions import ReactionInvalid, ReactionRepository, ReactionService
 
+logger = logging.getLogger(__name__)
+
 
 def create_app(
     *,
@@ -96,7 +100,13 @@ def create_app(
             push_repository or PocketBasePushDeviceRepository(client),
             push_gateway or FirebasePushGateway(resolved_settings.firebase_credentials_json),
         )
-        yield
+        stale_game_task = asyncio.create_task(close_stale_games(game_service))
+        try:
+            yield
+        finally:
+            stale_game_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await stale_game_task
         if owns_pocketbase:
             await client.close()
 
@@ -196,3 +206,12 @@ def add_spa_routes(application: FastAPI, frontend_dist: Path) -> None:
 
 
 app = create_app()
+
+
+async def close_stale_games(game_service: GameService) -> None:
+    while True:
+        try:
+            await game_service.expire_stale_waiting_games()
+        except Exception:
+            logger.exception("Could not close stale waiting games")
+        await asyncio.sleep(60 * 60)

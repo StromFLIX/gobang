@@ -15,6 +15,17 @@ const customAvatar: AvatarConfig = {
 }
 
 describe('AvatarPicker', () => {
+  it('preserves the legacy index order for saved custom avatars', () => {
+    expect(decodeAvatar('av1-11-7-6-5-4-5')).toEqual({
+      hair: 'twists2',
+      face: 'smileBig',
+      accessory: 'sunglasses',
+      facialHair: 'moustache4',
+      skin: '614335',
+      shirt: 'e279c7',
+    })
+  })
+
   it('round-trips a custom character through the profile-safe value', () => {
     const encoded = encodeAvatar(customAvatar)
 

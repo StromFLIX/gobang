@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-  Check,
   ChevronLeft,
   Copy,
   Crown,
@@ -11,8 +10,6 @@ import {
   Share2,
   ThumbsUp,
   UserPlus,
-  Wifi,
-  WifiOff,
   X,
 } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -478,23 +475,13 @@ function stoneFor(playerId: string): Stone | null {
           @dismiss="dismissChallenge"
         />
         <span v-if="game" class="round-label">Round {{ game.round }}</span>
-        <span :class="['connection-pill', `connection-pill--${connection}`]">
-          <Wifi v-if="connection === 'live'" :size="14" />
-          <WifiOff v-else-if="connection === 'offline'" :size="14" />
-          <RefreshCw v-else :size="14" />
-          {{ connection }}
-        </span>
-        <button
-          v-if="game"
-          type="button"
-          class="icon-button icon-button--muted"
-          :title="copied ? 'Copied' : 'Share game'"
-          :aria-label="copied ? 'Game link copied' : 'Share game'"
-          @click="shareRoom"
+        <span
+          :class="['connection-indicator', `connection-indicator--${connection}`]"
+          :title="connection"
+          :aria-label="`Connection: ${connection}`"
         >
-          <Check v-if="copied" :size="18" />
-          <Share2 v-else :size="18" />
-        </button>
+          <i :class="['presence-dot', { 'presence-dot--pulse': connection !== 'offline' }]" />
+        </span>
       </div>
     </header>
 
@@ -605,10 +592,14 @@ function stoneFor(playerId: string): Stone | null {
 
         <div
           :class="[
-            'player-rail player-rail--right',
+            'player-rail',
+            { 'player-rail--right': game.status !== 'waiting' },
             { 'player-rail--turn': game.status === 'active' && game.turn === 'white' },
           ]"
         >
+          <span v-if="game.status === 'waiting'" class="open-seat-avatar" aria-hidden="true">
+            <UserPlus :size="19" />
+          </span>
           <span
             v-if="game.status !== 'waiting'"
             class="stone-total stone-total--white"
@@ -656,11 +647,8 @@ function stoneFor(playerId: string): Stone | null {
               {{ opponentPresenceLabel }}
             </span>
           </div>
-          <span v-if="game.status === 'waiting'" class="open-seat-avatar" aria-hidden="true">
-            <UserPlus :size="19" />
-          </span>
           <AvatarImage
-            v-else
+            v-if="game.status !== 'waiting'"
             :seed="whitePlayer?.avatar_seed ?? 'white'"
             color="white"
             size="medium"

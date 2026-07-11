@@ -378,6 +378,7 @@ function advanceReplay() {
 }
 
 .match-replay__capture {
+  position: absolute;
   z-index: 2;
   width: 82%;
   aspect-ratio: 1;

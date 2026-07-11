@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -205,6 +205,38 @@ async def test_host_can_cancel_only_while_waiting(service: GameService) -> None:
         await service.cancel(waiting.id, THIRD.id)
     cancelled = await service.cancel(waiting.id, HOST.id)
     assert cancelled.status is GameStatus.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_dismissing_active_game_resigns_and_hides_it(
+    service: GameService, repository: MemoryRepository
+) -> None:
+    game = await active_game(service)
+
+    await service.dismiss(game.id, HOST.id)
+
+    stored = repository.games[game.id]
+    assert stored.status is GameStatus.RESIGNED
+    assert stored.resigned_by_id == HOST.id
+    assert stored.winner_player_id == GUEST.id
+    assert stored.hidden_by_ids == (HOST.id,)
+    assert await service.list_for_player(HOST.id) == []
+    assert len(await service.list_for_player(GUEST.id)) == 1
+
+
+@pytest.mark.asyncio
+async def test_waiting_game_expires_after_24_hours(
+    service: GameService, repository: MemoryRepository
+) -> None:
+    game = await service.create(HOST)
+    repository.games[game.id].updated_at = COMPLETED_AT - timedelta(hours=24, seconds=1)
+
+    listed = await service.list_for_player(HOST.id)
+
+    assert listed == []
+    assert repository.games[game.id].status is GameStatus.CANCELLED
+    with pytest.raises(GameNotFound):
+        await service.join(game.invite_code, GUEST)
 
 
 @pytest.mark.asyncio

@@ -11,6 +11,7 @@ from app.domain.rules import MoveError, Stone, apply_move, empty_board
 
 INITIAL_ELO = 1200.0
 ELO_K_FACTOR = 32
+WAITING_GAME_TTL = timedelta(hours=24)
 
 
 class GameServiceError(Exception):
@@ -156,6 +157,9 @@ class GameService:
             game = await self._repository.get_by_invite(invite_code)
             if game is None or game.status is GameStatus.CANCELLED:
                 raise GameNotFound("Game not found")
+            if self._waiting_game_expired(game):
+                await self._set_status(game, GameStatus.CANCELLED)
+                raise GameNotFound("Game not found")
             if player.id in game.player_ids():
                 return game
             if game.status is not GameStatus.WAITING or game.guest is not None:
@@ -182,7 +186,21 @@ class GameService:
         return self._require_participant(game, player_id)
 
     async def list_for_player(self, player_id: str) -> Sequence[Game]:
-        return await self._repository.list_for_player(player_id)
+        games = await self._repository.list_for_player(player_id)
+        expired_game_ids: set[str] = set()
+        for game in games:
+            if self._waiting_game_expired(game) and await self._expire_waiting_game(game.id):
+                expired_game_ids.add(game.id)
+        return [
+            game
+            for game in games
+            if game.id not in expired_game_ids and player_id not in game.hidden_by_ids
+        ]
+
+    async def expire_stale_waiting_games(self) -> None:
+        for game in await self._repository.list_all():
+            if self._waiting_game_expired(game):
+                await self._expire_waiting_game(game.id)
 
     async def leaderboard(self, player: Player) -> Leaderboard:
         games = await self._repository.list_all()
@@ -456,18 +474,29 @@ class GameService:
             )
             if game.status is not GameStatus.ACTIVE:
                 raise GameInvalidAction("Only an active game can be resigned")
-            winner_id = game.opponent_of(player_id)
-            if winner_id is None:
-                raise GameInvalidAction("The second player has not joined")
-
             previous_revision = game.revision
-            game.status = GameStatus.RESIGNED
-            game.resigned_by_id = player_id
-            game.winner_player_id = winner_id
-            self._award_point(game, winner_id)
-            self._record_result(game)
+            self._apply_resignation(game, player_id)
             game.revision += 1
             return await self._repository.update(game, previous_revision)
+
+    async def dismiss(self, game_id: str, player_id: str) -> None:
+        async with self._lock(game_id):
+            game = self._require_participant(
+                await self._repository.get_by_id(game_id), player_id
+            )
+            if player_id in game.hidden_by_ids:
+                return
+
+            previous_revision = game.revision
+            if game.status is GameStatus.ACTIVE:
+                self._apply_resignation(game, player_id)
+            elif game.status is GameStatus.WAITING:
+                if player_id != game.host.id:
+                    raise GameForbidden("Only the host can remove a waiting game")
+                game.status = GameStatus.CANCELLED
+            game.hidden_by_ids = (*game.hidden_by_ids, player_id)
+            game.revision += 1
+            await self._repository.update(game, previous_revision)
 
     async def set_rematch(self, game_id: str, player_id: str, ready: bool) -> Game:
         async with self._lock(game_id):
@@ -516,6 +545,31 @@ class GameService:
         game.status = status
         game.revision += 1
         return await self._repository.update(game, previous_revision)
+
+    async def _expire_waiting_game(self, game_id: str) -> bool:
+        async with self._lock(game_id):
+            game = await self._repository.get_by_id(game_id)
+            if game and self._waiting_game_expired(game):
+                await self._set_status(game, GameStatus.CANCELLED)
+                return True
+            return False
+
+    def _waiting_game_expired(self, game: Game) -> bool:
+        return (
+            game.status is GameStatus.WAITING
+            and game.updated_at is not None
+            and game.updated_at <= self._now() - WAITING_GAME_TTL
+        )
+
+    def _apply_resignation(self, game: Game, player_id: str) -> None:
+        winner_id = game.opponent_of(player_id)
+        if winner_id is None:
+            raise GameInvalidAction("The second player has not joined")
+        game.status = GameStatus.RESIGNED
+        game.resigned_by_id = player_id
+        game.winner_player_id = winner_id
+        self._award_point(game, winner_id)
+        self._record_result(game)
 
     @staticmethod
     def _award_point(game: Game, player_id: str) -> None:

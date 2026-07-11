@@ -758,6 +758,31 @@ def test_private_room_turn_and_revision_protection() -> None:
         assert stale.status_code == 409
 
 
+def test_dismissing_active_game_resigns_and_hides_it_from_requester() -> None:
+    with make_client() as client:
+        created = client.post("/api/games", headers={"Authorization": "Bearer host-token"}).json()
+        joined = client.post(
+            "/api/games/join",
+            headers={"Authorization": "Bearer guest-token"},
+            json={"invite_code": created["invite_code"]},
+        ).json()
+
+        response = client.delete(
+            f"/api/games/{joined['id']}",
+            headers={"Authorization": "Bearer host-token"},
+        )
+
+        assert response.status_code == 204
+        assert client.get(
+            "/api/games", headers={"Authorization": "Bearer host-token"}
+        ).json() == []
+        guest_games = client.get(
+            "/api/games", headers={"Authorization": "Bearer guest-token"}
+        ).json()
+        assert guest_games[0]["status"] == "resigned"
+        assert guest_games[0]["winner_player_id"] == "guest"
+
+
 def test_leaderboard_reports_overall_and_personal_results() -> None:
     with make_client() as client:
         created = client.post("/api/games", headers={"Authorization": "Bearer host-token"}).json()
