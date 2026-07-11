@@ -249,6 +249,7 @@ npm run test:e2e
 TLS terminates at Coolify. Caddy handles internal same-origin routing and does not expose the PocketBase dashboard.
 Its configuration is baked into the Caddy image because Coolify deploys Compose files from an artifacts directory where repository-relative file mounts are not reliable.
 Do not add a host port mapping in Coolify; its proxy connects to Caddy on internal port `80`.
+Keep the services on Compose's default network. Coolify replaces that network with its proxy-connected resource network; adding another network makes Caddy multi-homed and can cause Traefik to select an unreachable container address.
 
 Coolify replaces this Compose stack with a stop/start cutover. During deployment, its proxy can briefly return `503 no available server` after the old Caddy container stops and before the replacement passes its health check. Startup health checks run every second to minimize that interval, then return to a ten-second cadence. True zero-downtime deployment requires moving the persistent PocketBase service out of this stack and deploying the stateless app/proxy separately so old and new web containers can overlap.
 

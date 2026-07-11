@@ -34,8 +34,6 @@ services:
     logging: *default-logging
     volumes:
       - pocketbase_data:/pb/pb_data
-    networks:
-      - internal
 
   app:
     build:
@@ -63,8 +61,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
     logging: *default-logging
-    networks:
-      - internal
 
   caddy:
     build:
@@ -79,11 +75,6 @@ services:
         condition: service_healthy
     expose:
       - '80'
-    networks:
-      - internal
-
-networks:
-  internal:
 
 volumes:
   pocketbase_data:
