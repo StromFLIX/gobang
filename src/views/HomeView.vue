@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   ArrowRight,
+  Bell,
   ChevronDown,
   ChevronUp,
   Grid3X3,
@@ -100,6 +101,10 @@ const outgoingPendingPlayerIds = computed(() =>
   invitations.value
     .filter((invitation) => invitation.challenger.id === player.value?.id)
     .map((invitation) => invitation.recipient.id),
+)
+const incomingInvitationCount = computed(
+  () =>
+    invitations.value.filter((invitation) => invitation.recipient.id === player.value?.id).length,
 )
 const matchmakingElapsedLabel = computed(() => {
   const minutes = Math.floor(matchmakingElapsed.value / 60)
@@ -485,16 +490,6 @@ async function dismissGames(selectedGames: Game[]) {
 
       <div v-if="ready && player" class="account-summary">
         <div ref="accountMenuRef" class="account-menu-wrap">
-          <InvitationInbox
-            v-if="!player.is_guest"
-            compact
-            :invitations="invitations"
-            :player-id="player.id"
-            :loading="invitationsLoading"
-            :error="invitationsError"
-            @accept="acceptChallenge"
-            @dismiss="dismissChallenge"
-          />
           <button
             type="button"
             class="account-avatar-button"
@@ -505,12 +500,33 @@ async function dismissGames(selectedGames: Game[]) {
             @click="accountMenuOpen = !accountMenuOpen"
           >
             <AvatarImage :seed="player.avatar_seed" size="medium" />
+            <span
+              v-if="!player.is_guest"
+              :class="[
+                'account-avatar-notification',
+                { 'account-avatar-notification--active': incomingInvitationCount },
+              ]"
+              aria-hidden="true"
+            >
+              <Bell :size="12" />
+              <small v-if="incomingInvitationCount">{{ incomingInvitationCount }}</small>
+            </span>
           </button>
-          <div v-if="accountMenuOpen" class="account-menu" role="menu">
+          <div v-if="accountMenuOpen" class="account-menu" role="dialog" aria-label="Player menu">
             <div class="account-menu__identity">
               <strong>{{ player.display_name }}</strong>
               <small>{{ player.is_guest ? 'Guest player' : shortPlayerId(player.id) }}</small>
             </div>
+            <InvitationInbox
+              v-if="!player.is_guest"
+              embedded
+              :invitations="invitations"
+              :player-id="player.id"
+              :loading="invitationsLoading"
+              :error="invitationsError"
+              @accept="acceptChallenge"
+              @dismiss="dismissChallenge"
+            />
             <button type="button" role="menuitem" @click="openAccount('profile')">
               <Settings :size="17" />
               Edit player

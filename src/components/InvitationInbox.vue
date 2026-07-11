@@ -10,7 +10,7 @@ const props = defineProps<{
   playerId: string
   loading: boolean
   error: string
-  compact?: boolean
+  embedded?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -33,8 +33,9 @@ function accept(invitationId: string) {
 </script>
 
 <template>
-  <div :class="['invitation-inbox', { 'invitation-inbox--compact': compact }]">
+  <div :class="['invitation-inbox', { 'invitation-inbox--embedded': embedded }]">
     <button
+      v-if="!embedded"
       type="button"
       class="icon-button icon-button--muted invitation-trigger"
       title="Challenges"
@@ -46,13 +47,20 @@ function accept(invitationId: string) {
       <span v-if="incoming.length" class="invitation-badge">{{ incoming.length }}</span>
     </button>
 
-    <section v-if="open" class="invitation-popover" aria-label="Challenges">
+    <section v-if="embedded || open" class="invitation-popover" aria-label="Challenges">
       <div class="invitation-popover__header">
         <div>
           <span>Challenges</span>
           <strong>{{ incoming.length ? `${incoming.length} waiting` : 'No new invites' }}</strong>
         </div>
-        <button type="button" class="icon-button" title="Close" aria-label="Close" @click="open = false">
+        <button
+          v-if="!embedded"
+          type="button"
+          class="icon-button"
+          title="Close"
+          aria-label="Close"
+          @click="open = false"
+        >
           <X :size="18" />
         </button>
       </div>
@@ -123,41 +131,6 @@ function accept(invitationId: string) {
   position: relative;
 }
 
-.invitation-inbox--compact {
-  position: absolute;
-  z-index: 2;
-  top: -0.25rem;
-  right: -0.25rem;
-}
-
-.invitation-inbox--compact .invitation-trigger {
-  width: 1.35rem;
-  height: 1.35rem;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  color: #fff;
-  background: var(--color-green);
-}
-
-.invitation-inbox--compact .invitation-trigger svg {
-  width: 0.72rem;
-  height: 0.72rem;
-}
-
-.invitation-inbox--compact .invitation-badge {
-  top: -0.55rem;
-  right: -0.55rem;
-  animation: invitation-pulse 1.2s ease-in-out infinite;
-}
-
-.invitation-inbox--compact .invitation-popover {
-  top: calc(100% + 0.8rem);
-}
-
-@keyframes invitation-pulse {
-  50% { box-shadow: 0 0 0 5px rgba(181, 53, 47, 0.18); }
-}
-
 .invitation-badge {
   position: absolute;
   top: -0.28rem;
@@ -186,6 +159,28 @@ function accept(invitationId: string) {
   border-radius: 8px;
   background: var(--color-surface);
   box-shadow: 0 18px 50px rgba(14, 25, 18, 0.22);
+}
+
+.invitation-inbox--embedded .invitation-popover {
+  position: static;
+  width: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.invitation-inbox--embedded .invitation-popover__header {
+  padding: 0.65rem;
+}
+
+.invitation-inbox--embedded .invitation-row {
+  padding-inline: 0.65rem;
+}
+
+.invitation-inbox--embedded .invitation-empty {
+  min-height: 4rem;
+  padding: 0.75rem 0.65rem;
+  font-size: 0.75rem;
 }
 
 .invitation-popover__header {

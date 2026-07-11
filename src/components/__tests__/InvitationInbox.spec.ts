@@ -38,6 +38,22 @@ function invitation(id: string, challenger: Player, recipient: Player): Invitati
 }
 
 describe('InvitationInbox', () => {
+  it('renders inside a parent popup without its own trigger or popover chrome', () => {
+    const wrapper = mount(InvitationInbox, {
+      props: {
+        invitations: [invitation('incoming', alex, me)],
+        playerId: me.id,
+        loading: false,
+        error: '',
+        embedded: true,
+      },
+    })
+
+    expect(wrapper.find('button[aria-label="Challenges"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Close"]').exists()).toBe(false)
+    expect(wrapper.get('.invitation-popover').text()).toContain('Alex')
+  })
+
   it('distinguishes incoming requests from outgoing pending challenges', async () => {
     const wrapper = mount(InvitationInbox, {
       props: {
