@@ -571,9 +571,10 @@ async function dismissGames(selectedGames: Game[]) {
 
         <div class="lobby-entry">
           <p class="section-kicker">Play Gobang</p>
-          <h1 id="lobby-intro-title">Choose your match.</h1>
+          <h1 id="lobby-intro-title">Play Gobang online.</h1>
           <p class="lobby-entry__lead">
-            Five in a row, pair captures, and a live opponent on the other side.
+            A Gomoku-style strategy game with five-in-a-row wins, pair captures, and a live
+            opponent. Find a ranked match or invite a friend with one link.
           </p>
 
           <div v-if="!hasPlayerName" class="lobby-player-setup">

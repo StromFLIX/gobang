@@ -348,6 +348,9 @@ def test_legal_pages_are_not_indexable(tmp_path: Path) -> None:
     expected = "noindex, nofollow, noarchive, nosnippet"
     assert imprint.headers["x-robots-tag"] == expected
     assert privacy.headers["x-robots-tag"] == expected
+    assert client.get("/account").headers["x-robots-tag"] == expected
+    assert client.get("/account-deletion").headers["x-robots-tag"] == expected
+    assert client.get("/game/private-code").headers["x-robots-tag"] == expected
     assert "x-robots-tag" not in home.headers
 
 

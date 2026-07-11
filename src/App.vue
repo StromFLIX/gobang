@@ -24,17 +24,15 @@ watch(isPublicRoute, (publicRoute) => {
 watch(
   isNoIndexRoute,
   (noIndex) => {
-    const selector = 'meta[name="robots"][data-gobang-managed]'
-    const existing = document.head.querySelector<HTMLMetaElement>(selector)
-    if (!noIndex) {
-      existing?.remove()
-      return
-    }
-    const meta = existing ?? document.createElement('meta')
+    const meta = document.head.querySelector<HTMLMetaElement>(
+      'meta[name="robots"][data-gobang-managed]',
+    ) ?? document.createElement('meta')
     meta.name = 'robots'
-    meta.content = 'noindex, nofollow, noarchive, nosnippet'
+    meta.content = noIndex
+      ? 'noindex, nofollow, noarchive, nosnippet'
+      : 'index, follow, max-image-preview:large'
     meta.dataset.gobangManaged = ''
-    if (!existing) document.head.append(meta)
+    if (!meta.parentNode) document.head.append(meta)
   },
   { immediate: true },
 )

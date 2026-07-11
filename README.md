@@ -254,6 +254,17 @@ Coolify replaces this Compose stack with a stop/start cutover. During deployment
 
 The public domain must be assigned only to the `caddy` service. Leave domains blank for `app` and `pocketbase`; assigning the domain to `app` bypasses `/pb` routing and breaks realtime subscriptions.
 
+## Search indexing
+
+The root page is the only indexable application route. It includes canonical, Open Graph, Twitter, and `VideoGame` structured metadata. Private games, accounts, verification, deletion, privacy, and legal-notice routes return `X-Robots-Tag: noindex`. After the first SEO-enabled deployment:
+
+1. Add `gobang.stromflix.com` to [Google Search Console](https://search.google.com/search-console/) and verify ownership with the DNS TXT record Google provides.
+2. Submit `https://gobang.stromflix.com/sitemap.xml` under **Sitemaps**.
+3. Inspect `https://gobang.stromflix.com/` and request indexing once. Google decides when and where the result appears.
+4. Optionally import the verified property into [Bing Webmaster Tools](https://www.bing.com/webmasters/).
+
+If the public domain changes, update its absolute URLs in `index.html`, `public/robots.txt`, and `public/sitemap.xml` before deploying.
+
 After deployment, verify both routes through the public domain:
 
 ```sh
