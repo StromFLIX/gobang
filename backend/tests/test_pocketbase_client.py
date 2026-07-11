@@ -6,6 +6,38 @@ from app.config import Settings
 
 
 @pytest.mark.asyncio
+async def test_verification_uses_pocketbase_auth_endpoints() -> None:
+    requests: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(204)
+
+    http_client = httpx.AsyncClient(
+        base_url="http://pocketbase.test",
+        transport=httpx.MockTransport(handle),
+    )
+    client = PocketBaseClient(Settings(), http_client)
+
+    await client.request_verification("player@example.com")
+    await client.confirm_verification("verification-token")
+    await http_client.aclose()
+
+    assert [(request.method, request.url.path, request.content) for request in requests] == [
+        (
+            "POST",
+            "/api/collections/players/request-verification",
+            b'{"email":"player@example.com"}',
+        ),
+        (
+            "POST",
+            "/api/collections/players/confirm-verification",
+            b'{"token":"verification-token"}',
+        ),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_delete_account_reauthenticates_and_removes_games_before_player() -> None:
     requests: list[tuple[str, str]] = []
     game_pages = 0

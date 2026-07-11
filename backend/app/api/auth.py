@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
 
 from app.api.dependencies import CurrentPlayer, GameServiceDependency, PocketBaseDependency
 from app.api.schemas import (
     AuthResponse,
+    ConfirmVerificationRequest,
     CreateAccountRequest,
     DeleteAccountRequest,
     GuestAuthResponse,
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @router.post("/accounts", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def create_account(
     body: CreateAccountRequest,
+    background_tasks: BackgroundTasks,
     pocketbase: PocketBaseDependency,
 ) -> AuthResponse:
     session = await pocketbase.create_account(
@@ -27,7 +29,17 @@ async def create_account(
         body.display_name,
         body.avatar_seed,
     )
+    background_tasks.add_task(pocketbase.request_verification, str(body.email))
     return AuthResponse.from_session(session)
+
+
+@router.post("/verification", status_code=status.HTTP_204_NO_CONTENT)
+async def confirm_verification(
+    body: ConfirmVerificationRequest,
+    pocketbase: PocketBaseDependency,
+) -> Response:
+    await pocketbase.confirm_verification(body.token)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
@@ -86,10 +98,12 @@ async def update_profile(
 @router.post("/register", response_model=AuthResponse)
 async def register(
     body: RegisterRequest,
+    background_tasks: BackgroundTasks,
     player: CurrentPlayer,
     pocketbase: PocketBaseDependency,
 ) -> AuthResponse:
     if not player.is_guest:
         raise HTTPException(status.HTTP_409_CONFLICT, "This profile is already registered")
     session = await pocketbase.register_guest(player.id, str(body.email), body.password)
+    background_tasks.add_task(pocketbase.request_verification, str(body.email))
     return AuthResponse.from_session(session)

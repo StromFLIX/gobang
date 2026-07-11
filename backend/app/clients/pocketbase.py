@@ -59,6 +59,20 @@ class PocketBaseClient:
         )
         return _session_from_auth(data)
 
+    async def request_verification(self, email: str) -> None:
+        await self._request(
+            "POST",
+            "/api/collections/players/request-verification",
+            json={"email": email},
+        )
+
+    async def confirm_verification(self, token: str) -> None:
+        await self._request(
+            "POST",
+            "/api/collections/players/confirm-verification",
+            json={"token": token},
+        )
+
     async def get_player(self, player_id: str) -> Player | None:
         try:
             record = await self.admin_request(

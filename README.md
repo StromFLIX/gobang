@@ -27,6 +27,31 @@ Local port `8080` is published by `compose.override.yaml`, which Docker Compose 
 
 PocketBase data is stored in the `pocketbase_data` volume. Do not remove that volume during updates.
 
+## Signup email verification
+
+PocketBase mail settings are applied from environment variables during every container startup; the PocketBase dashboard does not need to be exposed. SMTP is disabled by default. To use Resend, verify the sending domain in Resend and configure these values in `.env` locally or in the Coolify resource environment:
+
+```env
+PB_APP_NAME=Gobang
+PB_APP_URL=https://gobang.stromflix.com
+PB_MAIL_SENDER_NAME=Go Bang
+PB_MAIL_SENDER_ADDRESS=no-reply@gobang.stromflix.com
+PB_SMTP_ENABLED=true
+PB_SMTP_HOST=smtp.resend.com
+PB_SMTP_PORT=465
+PB_SMTP_USERNAME=resend
+PB_SMTP_PASSWORD=re_replace_with_resend_api_key
+PB_SMTP_AUTH_METHOD=PLAIN
+PB_SMTP_TLS=true
+PB_SMTP_LOCAL_NAME=
+```
+
+Treat `PB_SMTP_PASSWORD` as a secret. The other mail values may be regular deployment variables. Port `465` with `PB_SMTP_TLS=true` uses TLS from connection start; for a provider that expects StartTLS on port `587`, set `PB_SMTP_TLS=false`.
+
+Creating a registered account or upgrading a browser guest requests PocketBase's verification email in the background. The account remains signed in while unverified. The email links to `/verify-email`, where the Vue app confirms the token through FastAPI; the PocketBase dashboard and settings APIs remain blocked by Caddy. PocketBase limits repeat verification requests for the same account to one every two minutes.
+
+Before enabling production email, publish the provider's SPF and DKIM records, add an appropriate DMARC policy, and update the privacy notice with the chosen email delivery provider and processing location. Deploy both `pocketbase` and `app` after changing these values or the verification flow.
+
 The lobby leaderboard ranks players by a current Elo rating calculated from timestamped round results, starting at 1200 with a K-factor of 32. It also shows W-L-D records for the last 7 days or all time. `Against friends` groups the current player's record by opponents they have played, while result history shows who beat whom. Scores created before the timestamped result migration remain in all-time totals but cannot affect Elo or appear in the 7-day view or dated result history.
 
 Registered players can challenge other registered players from the overall leaderboard's `Around you`, `Top 10`, and `All players` views. A challenge is a private pending invitation, not a game: the recipient sees it in the realtime header inbox and may accept or dismiss it, while the sender may cancel it. Acceptance creates the active game and opens it for both players. Pending challenges expire after 24 hours. Anonymous players can still view rankings and play through shared game links, but they cannot send or receive leaderboard challenges.
@@ -183,7 +208,7 @@ npm run test:e2e
 ## Coolify
 
 1. Create a Docker Compose resource from this repository.
-2. Set `PB_SUPERUSER_EMAIL`, a long random `PB_SUPERUSER_PASSWORD`, and `FIREBASE_CREDENTIALS_JSON` as secrets, and set every required `LEGAL_*` value listed above.
+2. Set `PB_SUPERUSER_EMAIL`, a long random `PB_SUPERUSER_PASSWORD`, `FIREBASE_CREDENTIALS_JSON`, and `PB_SMTP_PASSWORD` as secrets. Set every required `LEGAL_*` value and the non-secret `PB_APP_*`, `PB_MAIL_*`, and `PB_SMTP_*` values documented above.
 3. Attach the public domain to the `caddy` service on port `80`.
 4. Keep the generated `pocketbase_data` volume persistent across deployments.
 5. Configure the health check against `/health` through the public domain.

@@ -151,6 +151,8 @@ class MemoryPushRepository:
 
 class FakePocketBase:
     def __init__(self) -> None:
+        self.verification_requests: list[str] = []
+        self.confirmed_verification_tokens: list[str] = []
         self.players = {
             "host-token": Player("host", "Flo", "flo"),
             "guest-token": Player("guest", "Felix", "felix"),
@@ -191,6 +193,12 @@ class FakePocketBase:
             raise PocketBaseError(400, "Invalid credentials")
         return PlayerSession("account-token", self.players["account-token"])
 
+    async def request_verification(self, email: str) -> None:
+        self.verification_requests.append(email)
+
+    async def confirm_verification(self, token: str) -> None:
+        self.confirmed_verification_tokens.append(token)
+
     async def update_profile(self, player_id: str, display_name: str, avatar_seed: str) -> Player:
         token = next(token for token, player in self.players.items() if player.id == player_id)
         updated = replace(self.players[token], display_name=display_name, avatar_seed=avatar_seed)
@@ -216,6 +224,7 @@ def make_client(
     matchmaking_repository: MemoryMatchmakingRepository | None = None,
     push_repository: MemoryPushRepository | None = None,
     settings: Settings | None = None,
+    pocketbase: FakePocketBase | None = None,
 ) -> TestClient:
     app = create_app(
         settings=settings
@@ -224,7 +233,7 @@ def make_client(
             legal_street_address="Private Street 1",
             legal_postal_city="8000 Zurich",
         ),
-        pocketbase=FakePocketBase(),  # type: ignore[arg-type]
+        pocketbase=pocketbase or FakePocketBase(),  # type: ignore[arg-type]
         repository=MemoryRepository(),
         invitation_repository=MemoryInvitationRepository(),
         reaction_repository=reaction_repository or MemoryReactionRepository(),
@@ -360,6 +369,35 @@ def test_registered_account_can_be_created_without_guest_session() -> None:
                 "is_guest": False,
             },
         }
+
+
+def test_signup_requests_verification_and_token_can_be_confirmed() -> None:
+    pocketbase = FakePocketBase()
+    with make_client(pocketbase=pocketbase) as client:
+        account = client.post(
+            "/api/auth/accounts",
+            json={
+                "email": "native@example.com",
+                "password": "password123",
+                "display_name": "Native player",
+                "avatar_seed": "native-player",
+            },
+        )
+        assert account.status_code == 201
+
+        guest = client.post("/api/auth/guest")
+        assert guest.status_code == 201
+        registered = client.post(
+            "/api/auth/register",
+            headers={"Authorization": "Bearer new-token"},
+            json={"email": "web@example.com", "password": "password123"},
+        )
+        assert registered.status_code == 200
+        assert pocketbase.verification_requests == ["native@example.com", "web@example.com"]
+
+        confirmed = client.post("/api/auth/verification", json={"token": "valid-token"})
+        assert confirmed.status_code == 204
+        assert pocketbase.confirmed_verification_tokens == ["valid-token"]
 
 
 def test_registered_account_deletion_requires_password_and_removes_session() -> None:

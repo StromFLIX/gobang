@@ -41,6 +41,12 @@ const router = createRouter({
       component: () => import('../views/AccountDeletionView.vue'),
       meta: { public: true },
     },
+    {
+      path: '/verify-email',
+      name: 'verify-email',
+      component: () => import('../views/EmailVerificationView.vue'),
+      meta: { public: true, noIndex: true },
+    },
   ],
 })
 

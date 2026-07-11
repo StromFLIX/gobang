@@ -69,6 +69,8 @@ export const api = {
     ),
   login: (email: string, password: string) =>
     request<AuthSession>('/api/auth/login', json('POST', { email, password })),
+  confirmVerification: (token: string) =>
+    request<void>('/api/auth/verification', json('POST', { token })),
   mergeLogin: (email: string, password: string) =>
     request<MergedAuthSession>('/api/auth/merge-login', json('POST', { email, password })),
   getMe: () => request<Player>('/api/auth/me'),

@@ -27,6 +27,9 @@ AvatarSeed = Annotated[
     StringConstraints(strip_whitespace=True, min_length=1, max_length=64, pattern=r"^[\w-]+$"),
 ]
 Password = Annotated[str, StringConstraints(min_length=8, max_length=72)]
+VerificationToken = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4096)
+]
 
 
 class PlayerResponse(BaseModel):
@@ -99,6 +102,10 @@ class RegisterRequest(LoginRequest):
 class CreateAccountRequest(LoginRequest):
     display_name: DisplayName
     avatar_seed: AvatarSeed
+
+
+class ConfirmVerificationRequest(BaseModel):
+    token: VerificationToken
 
 
 class DeleteAccountRequest(BaseModel):

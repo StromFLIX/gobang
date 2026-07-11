@@ -186,7 +186,7 @@ def add_spa_routes(application: FastAPI, frontend_dist: Path) -> None:
     async def spa(path: str) -> FileResponse:
         headers = (
             {"X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet"}
-            if path in {"impressum", "privacy"}
+            if path in {"impressum", "privacy", "verify-email"}
             else None
         )
         requested_file = (frontend_dist / path).resolve()
