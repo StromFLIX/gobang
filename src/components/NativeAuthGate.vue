@@ -98,6 +98,7 @@ async function submit() {
             required
             autocomplete="nickname"
           />
+          <span class="field-label">Avatar</span>
           <AvatarPicker v-model="avatarSeed" />
         </template>
 
