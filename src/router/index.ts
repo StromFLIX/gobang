@@ -37,6 +37,10 @@ const router = createRouter({
       meta: { title: 'Gobang Account', noIndex: true },
     },
     {
+      path: '/oauth-complete',
+      redirect: '/account?mode=login',
+    },
+    {
       path: '/privacy',
       name: 'privacy',
       component: () => import('../views/PrivacyView.vue'),

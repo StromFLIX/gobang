@@ -7,6 +7,12 @@ describe('appPathFromUrl', () => {
     expect(appPathFromUrl('https://gobang.stromflix.com/game/ABC123')).toBe('/game/ABC123')
   })
 
+  it('routes OAuth completion links to the account screen', () => {
+    expect(appPathFromUrl('https://gobang.stromflix.com/oauth-complete')).toBe(
+      '/account?mode=login',
+    )
+  })
+
   it.each([
     'https://localhost/game/ABC123',
     'http://gobang.stromflix.com/game/ABC123',

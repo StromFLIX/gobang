@@ -9,6 +9,7 @@ export function appPathFromUrl(value: string) {
   try {
     const url = new URL(value)
     if (url.protocol !== 'https:' || url.hostname !== APP_LINK_HOST) return null
+    if (url.pathname === '/oauth-complete') return '/account?mode=login'
     return /^\/game\/[^/]+$/.test(url.pathname) ? url.pathname : null
   } catch {
     return null

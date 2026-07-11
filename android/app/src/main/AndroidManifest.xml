@@ -38,6 +38,11 @@
                     android:host="gobang.stromflix.com"
                     android:pathPrefix="/game/"
                 />
+                <data
+                    android:scheme="https"
+                    android:host="gobang.stromflix.com"
+                    android:path="/oauth-complete"
+                />
             </intent-filter>
         </activity>
 
