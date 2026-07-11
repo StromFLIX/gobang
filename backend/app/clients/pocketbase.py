@@ -140,6 +140,42 @@ class PocketBaseClient:
         )
         return await self.login(email, password)
 
+    async def delete_account(self, player_id: str, password: str) -> None:
+        record = await self.admin_request(
+            "GET", f"/api/collections/players/records/{player_id}"
+        )
+        try:
+            session = await self.login(str(record["email"]), password)
+        except PocketBaseError as error:
+            if error.status_code in {400, 401}:
+                raise PocketBaseError(401, "Current password is incorrect") from error
+            raise
+        if session.player.id != player_id:
+            raise PocketBaseError(401, "Current password is incorrect")
+
+        player_filter = _filter_value(player_id)
+        while True:
+            response = await self.admin_request(
+                "GET",
+                "/api/collections/games/records",
+                params={
+                    "filter": f'host = "{player_filter}" || guest = "{player_filter}"',
+                    "page": 1,
+                    "perPage": 100,
+                },
+            )
+            items = response["items"]
+            if not items:
+                break
+            for game in items:
+                await self.admin_request(
+                    "DELETE", f'/api/collections/games/records/{game["id"]}'
+                )
+
+        await self.admin_request(
+            "DELETE", f"/api/collections/players/records/{player_id}"
+        )
+
     async def admin_request(self, method: str, path: str, **kwargs: Any) -> Any:
         token = await self._get_admin_token()
         headers = {**kwargs.pop("headers", {}), "Authorization": token}
@@ -173,6 +209,8 @@ class PocketBaseClient:
         except httpx.HTTPError as error:
             raise PocketBaseError(503, "PocketBase is unavailable") from error
         if response.is_success:
+            if response.status_code == 204:
+                return None
             return response.json()
         try:
             data = response.json()
@@ -193,3 +231,7 @@ def _player_from_record(record: dict[str, Any]) -> Player:
         avatar_seed=str(record["avatar_seed"]),
         is_guest=bool(record["is_guest"]),
     )
+
+
+def _filter_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')

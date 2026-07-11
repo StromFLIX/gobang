@@ -101,6 +101,10 @@ class CreateAccountRequest(LoginRequest):
     avatar_seed: AvatarSeed
 
 
+class DeleteAccountRequest(BaseModel):
+    password: Password
+
+
 class ProfileRequest(BaseModel):
     display_name: DisplayName
     avatar_seed: AvatarSeed

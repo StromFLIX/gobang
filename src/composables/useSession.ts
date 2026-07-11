@@ -152,13 +152,26 @@ async function login(email: string, password: string, mergeGuestProgress = false
 async function logout() {
   ready.value = false
   await unregisterPushNotifications()
+  clearSession()
+  if (!isNativeApp) await createGuest()
+  ready.value = true
+}
+
+async function deleteAccount(password: string, createWebGuest = true) {
+  await api.deleteAccount(password)
+  ready.value = false
+  await unregisterPushNotifications()
+  clearSession()
+  if (!isNativeApp && createWebGuest) await createGuest()
+  ready.value = true
+}
+
+function clearSession() {
   localStorage.removeItem(STORAGE_KEY)
   player.value = null
   recovery.value = null
   profileConfigured.value = false
   setToken('')
-  if (!isNativeApp) await createGuest()
-  ready.value = true
 }
 
 export function useSession() {
@@ -174,5 +187,6 @@ export function useSession() {
     createAccount,
     login,
     logout,
+    deleteAccount,
   }
 }

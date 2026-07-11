@@ -14,6 +14,18 @@ const router = createRouter({
       name: 'game',
       component: () => import('../views/GameView.vue'),
     },
+    {
+      path: '/privacy',
+      name: 'privacy',
+      component: () => import('../views/PrivacyView.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/account-deletion',
+      name: 'account-deletion',
+      component: () => import('../views/AccountDeletionView.vue'),
+      meta: { public: true },
+    },
   ],
 })
 

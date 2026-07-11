@@ -82,6 +82,8 @@ export const api = {
     ),
   register: (email: string, password: string) =>
     request<AuthSession>('/api/auth/register', json('POST', { email, password })),
+  deleteAccount: (password: string) =>
+    request<void>('/api/auth/account', json('DELETE', { password })),
   getLeaderboard: () => request<Leaderboard>('/api/leaderboard'),
   listInvitations: () => request<Invitation[]>('/api/invitations'),
   sendInvitation: (playerId: string) =>

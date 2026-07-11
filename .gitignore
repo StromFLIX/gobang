@@ -23,6 +23,8 @@ pocketbase/pb_data/
 playwright-report/
 test-results/
 android/app/google-services.json
+*.jks
+*.keystore
 
 /cypress/videos/
 /cypress/screenshots/

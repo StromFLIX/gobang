@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.dependencies import CurrentPlayer, GameServiceDependency, PocketBaseDependency
 from app.api.schemas import (
     AuthResponse,
     CreateAccountRequest,
+    DeleteAccountRequest,
     GuestAuthResponse,
     LoginRequest,
     MergedAuthResponse,
@@ -27,6 +28,18 @@ async def create_account(
         body.avatar_seed,
     )
     return AuthResponse.from_session(session)
+
+
+@router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    body: DeleteAccountRequest,
+    player: CurrentPlayer,
+    pocketbase: PocketBaseDependency,
+) -> Response:
+    if player.is_guest:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only registered accounts can be deleted")
+    await pocketbase.delete_account(player.id, body.password)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/guest", response_model=GuestAuthResponse, status_code=status.HTTP_201_CREATED)

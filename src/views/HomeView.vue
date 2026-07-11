@@ -12,6 +12,7 @@ import {
   Search,
   Swords,
   Timer,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -41,7 +42,16 @@ import { subscribeToGame } from '@/services/pocketbase'
 import type { Game, Leaderboard, MatchmakingTicket } from '@/types/game'
 
 const router = useRouter()
-const { player, ready, bootstrapSession, updateProfile, register, login, logout } = useSession()
+const {
+  player,
+  ready,
+  bootstrapSession,
+  updateProfile,
+  register,
+  login,
+  logout,
+  deleteAccount,
+} = useSession()
 const {
   invitations,
   loading: invitationsLoading,
@@ -74,6 +84,10 @@ const authError = ref('')
 const mergeNotice = ref('')
 const profileEditing = ref(false)
 const profileSaving = ref(false)
+const deleteAccountOpen = ref(false)
+const deleteAccountPassword = ref('')
+const deleteAccountError = ref('')
+const deleteAccountBusy = ref(false)
 const showAllOpponents = ref(false)
 const matchmakingOpen = ref(false)
 const matchmakingTicket = ref<MatchmakingTicket | null>(null)
@@ -519,6 +533,35 @@ async function signOut() {
   await Promise.all([loadLeaderboard(), presenceHeartbeat()])
 }
 
+function openDeleteAccount() {
+  deleteAccountPassword.value = ''
+  deleteAccountError.value = ''
+  deleteAccountOpen.value = true
+}
+
+async function confirmDeleteAccount() {
+  deleteAccountError.value = ''
+  deleteAccountBusy.value = true
+  try {
+    clearGameSubscriptions()
+    stopMatchmakingTimers()
+    await stopInvitationUpdates()
+    await deleteAccount(deleteAccountPassword.value)
+    deleteAccountOpen.value = false
+    games.value = []
+    leaderboard.value = null
+    if (!isNativeApp) {
+      profileEditing.value = true
+      await Promise.all([loadLeaderboard(), presenceHeartbeat()])
+    }
+  } catch (error) {
+    deleteAccountError.value =
+      error instanceof ApiError ? error.message : 'Could not delete this account.'
+  } finally {
+    deleteAccountBusy.value = false
+  }
+}
+
 function gameFor(group: OpponentGameGroup) {
   return primaryGameFor(group, player.value?.id ?? '')
 }
@@ -763,6 +806,24 @@ function groupSummary(group: OpponentGameGroup) {
           >
             Cancel
           </button>
+        </div>
+        <div v-if="!player.is_guest" class="account-danger-zone">
+          <div>
+            <strong>Delete account</strong>
+            <p>Erase your profile, games, scores, invitations, and notification devices.</p>
+          </div>
+          <div class="account-danger-zone__actions">
+            <RouterLink to="/privacy" class="button button--quiet">Privacy policy</RouterLink>
+            <button
+              type="button"
+              class="button button--danger-quiet"
+              :disabled="profileSaving"
+              @click="openDeleteAccount"
+            >
+              <Trash2 :size="17" />
+              Delete account
+            </button>
+          </div>
         </div>
       </section>
 
@@ -1041,6 +1102,67 @@ function groupSummary(group: OpponentGameGroup) {
             Back
           </button>
         </div>
+      </section>
+    </div>
+
+    <div
+      v-if="deleteAccountOpen"
+      class="modal-backdrop"
+      @click.self="deleteAccountOpen = false"
+    >
+      <section
+        class="auth-dialog delete-account-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-account-title"
+      >
+        <div class="dialog-header">
+          <div>
+            <p class="section-kicker">Permanent action</p>
+            <h2 id="delete-account-title">Delete your account?</h2>
+          </div>
+          <button
+            type="button"
+            class="icon-button icon-button--muted"
+            :disabled="deleteAccountBusy"
+            title="Close"
+            aria-label="Close account deletion"
+            @click="deleteAccountOpen = false"
+          >
+            <X :size="19" />
+          </button>
+        </div>
+        <p class="delete-account-dialog__warning">
+          This permanently erases your profile and every game involving this account. Your
+          opponents will also lose those shared games from their history.
+        </p>
+        <form class="auth-form" @submit.prevent="confirmDeleteAccount">
+          <label class="field-label" for="delete-account-password">Current password</label>
+          <input
+            id="delete-account-password"
+            v-model="deleteAccountPassword"
+            class="text-input"
+            type="password"
+            minlength="8"
+            required
+            autocomplete="current-password"
+          />
+          <p v-if="deleteAccountError" class="form-error" role="alert">
+            {{ deleteAccountError }}
+          </p>
+          <button type="submit" class="button button--danger" :disabled="deleteAccountBusy">
+            <Trash2 :size="18" />
+            Permanently delete account
+          </button>
+          <button
+            type="button"
+            class="button button--secondary"
+            :disabled="deleteAccountBusy"
+            @click="deleteAccountOpen = false"
+          >
+            Keep account
+          </button>
+        </form>
       </section>
     </div>
   </div>

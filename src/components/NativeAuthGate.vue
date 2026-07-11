@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Grid3X3, LogIn, UserPlus } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import AvatarPicker from '@/components/AvatarPicker.vue'
 import { useSession } from '@/composables/useSession'
@@ -142,6 +143,10 @@ async function submit() {
           {{ mode === 'login' ? 'Sign in' : 'Create account' }}
         </button>
       </form>
+      <nav class="native-auth-legal" aria-label="Account and privacy information">
+        <RouterLink to="/privacy">Privacy</RouterLink>
+        <RouterLink to="/account-deletion">Delete account</RouterLink>
+      </nav>
     </section>
   </main>
 </template>
@@ -192,6 +197,19 @@ async function submit() {
 .native-auth-panel .button--primary {
   width: 100%;
   margin-top: 0.35rem;
+}
+
+.native-auth-legal {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  font-size: 0.82rem;
+}
+
+.native-auth-legal a {
+  color: var(--color-text-muted);
+  text-decoration: underline;
 }
 
 @media (max-width: 520px) {

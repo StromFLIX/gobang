@@ -211,6 +211,15 @@ class FakePocketBase:
         self.players[token] = registered
         return PlayerSession("registered-token", registered)
 
+    async def delete_account(self, player_id: str, password: str) -> None:
+        if password != "password123":
+            raise PocketBaseError(401, "Current password is incorrect")
+        tokens = [
+            token for token, player in self.players.items() if player.id == player_id
+        ]
+        for token in tokens:
+            del self.players[token]
+
 
 def make_client(
     reaction_repository: MemoryReactionRepository | None = None,
@@ -275,6 +284,37 @@ def test_registered_account_can_be_created_without_guest_session() -> None:
                 "is_guest": False,
             },
         }
+
+
+def test_registered_account_deletion_requires_password_and_removes_session() -> None:
+    with make_client() as client:
+        guest = client.request(
+            "DELETE",
+            "/api/auth/account",
+            headers={"Authorization": "Bearer guest-token"},
+            json={"password": "password123"},
+        )
+        assert guest.status_code == 409
+
+        wrong_password = client.request(
+            "DELETE",
+            "/api/auth/account",
+            headers={"Authorization": "Bearer account-token"},
+            json={"password": "not-the-password"},
+        )
+        assert wrong_password.status_code == 401
+
+        deleted = client.request(
+            "DELETE",
+            "/api/auth/account",
+            headers={"Authorization": "Bearer account-token"},
+            json={"password": "password123"},
+        )
+        assert deleted.status_code == 204
+        assert client.get(
+            "/api/auth/me",
+            headers={"Authorization": "Bearer account-token"},
+        ).status_code == 401
 
 
 def test_registered_android_device_can_enable_push_notifications() -> None:

@@ -61,11 +61,11 @@ npm install
 npm run android:build
 ```
 
-The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. Use `npm run android:open` to open the project in Android Studio. `npm run android:bundle` creates a release app bundle after release signing is configured in Gradle.
+The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. Use `npm run android:open` to open the project in Android Studio. A signed `npm run android:release` produces both `android/app/build/outputs/apk/release/app-release.apk` for direct installation and `android/app/build/outputs/bundle/release/app-release.aab` for Google Play.
 
 ### Automated Android releases
 
-`.github/workflows/android-release.yml` builds and signs an APK after every push to `main`. It also supports manual runs from the GitHub Actions page. Each successful run replaces the APK attached to the rolling `android-latest` release and retains a run-specific workflow artifact for 30 days.
+`.github/workflows/android-release.yml` builds and signs an APK and AAB after every push to `main`. It also supports manual runs from the GitHub Actions page. Each successful run replaces both files and their checksums on the rolling `android-latest` release and retains a run-specific workflow artifact for 30 days.
 
 Create the release keystore once and keep a secure offline backup. Android updates must always use the same signing key; losing it prevents future APKs from updating existing installations.
 
@@ -101,6 +101,17 @@ Push notifications use Firebase Cloud Messaging:
 The backend registers each signed-in installation in `push_devices` and sends notifications after an opponent moves, sends a challenge, or requests a rematch. Tapping a move or rematch notification opens that game; challenge notifications open the lobby inbox. Foreground notifications are intentionally not presented as system banners.
 
 The app includes no billing, advertising, analytics, backup, contacts, storage, or location integration. Its Android permissions are limited to network access and those required by FCM. FCM necessarily processes the installation token and notification payload to deliver background notifications; gameplay and profile data are not sent to advertising or analytics providers.
+
+### Google Play readiness
+
+The Android project targets API 36, uses a monotonically increasing CI version code, produces a signed Android App Bundle, has production launcher and notification assets, disables cleartext traffic and device backup, and includes an in-app account-deletion flow. The public compliance routes are:
+
+- `https://gobang.stromflix.com/privacy`
+- `https://gobang.stromflix.com/account-deletion`
+
+The deletion page signs the user in with their current credentials and permanently removes the account, games involving it, invitations, matchmaking tickets, reactions, and notification devices. Deploy the frontend and backend together before submitting these URLs to Play Console.
+
+The remaining publication work is intentionally manual in Play Console: create the app listing, enroll in Play App Signing, upload `gobang-android.aab`, complete App access and Content rating, declare the target audience, submit the Data safety answers that match the privacy policy, provide screenshots/graphics/contact details, select countries and pricing, and complete any required testing track. The first Play upload establishes the application and upload-key relationship; later CI publication can be added after Play grants service-account access.
 
 ## Checks
 

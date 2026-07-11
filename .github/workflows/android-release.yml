@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   release:
-    name: Build and publish APK
+    name: Build and publish Android release
     runs-on: ubuntu-latest
 
     steps:
@@ -75,7 +75,7 @@ jobs:
           printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/gobang-release.jks"
 
-      - name: Build signed release APK
+      - name: Build signed Android release
         env:
           VITE_API_BASE_URL: ${{ vars.ANDROID_API_BASE_URL || 'https://gobang.stromflix.com' }}
           ANDROID_VERSION_CODE: ${{ github.run_number }}
@@ -86,13 +86,15 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: npm run android:release
 
-      - name: Verify and stage APK
+      - name: Verify and stage Android release
         run: |
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs \
             android/app/build/outputs/apk/release/app-release.apk
           mkdir -p release
           cp android/app/build/outputs/apk/release/app-release.apk release/gobang-android.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab release/gobang-android.aab
           sha256sum release/gobang-android.apk > release/gobang-android.apk.sha256
+          sha256sum release/gobang-android.aab > release/gobang-android.aab.sha256
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -101,6 +103,8 @@ jobs:
           path: |
             release/gobang-android.apk
             release/gobang-android.apk.sha256
+            release/gobang-android.aab
+            release/gobang-android.aab.sha256
           retention-days: 30
           if-no-files-found: error
 
@@ -116,6 +120,8 @@ jobs:
 
           Version: 1.0.${GITHUB_RUN_NUMBER} (${GITHUB_RUN_NUMBER})
           Backend: ${{ vars.ANDROID_API_BASE_URL || 'https://gobang.stromflix.com' }}
+
+          The APK is for direct installation. The AAB is the Google Play upload artifact.
           EOF
           )
 
@@ -132,4 +138,6 @@ jobs:
           gh release upload android-latest \
             release/gobang-android.apk \
             release/gobang-android.apk.sha256 \
+            release/gobang-android.aab \
+            release/gobang-android.aab.sha256 \
             --clobber
