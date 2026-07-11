@@ -41,6 +41,57 @@ describe('Gobang bot', () => {
     expect(result.position).toBe(4)
   })
 
+  it('closes the gap in an opponent open broken three', () => {
+    const result = findBestMove({
+      board: boardWith({ 106: 'white', 107: 'white', 109: 'white', 95: 'black' }),
+      stone: 'black',
+      blockedPositions: [],
+      timeBudgetMs: 100,
+      maxDepth: 1,
+    })
+
+    expect(result.position).toBe(108)
+  })
+
+  it('does not count a temporarily blocked gap as an immediate threat', () => {
+    const result = findBestMove({
+      board: boardWith({
+        106: 'white',
+        107: 'white',
+        109: 'white',
+        112: 'black',
+        113: 'black',
+        114: 'black',
+      }),
+      stone: 'black',
+      blockedPositions: [108],
+      timeBudgetMs: 250,
+      maxDepth: 4,
+    })
+
+    expect(result.position).not.toBe(108)
+    expect([110, 111, 115, 116]).toContain(result.position)
+  })
+
+  it('prevents one jump from creating a double open three', () => {
+    const result = findBestMove({
+      board: boardWith({
+        82: 'white',
+        97: 'white',
+        110: 'white',
+        111: 'white',
+        16: 'black',
+        144: 'black',
+      }),
+      stone: 'black',
+      blockedPositions: [],
+      timeBudgetMs: 500,
+      maxDepth: 4,
+    })
+
+    expect(result.position).toBe(112)
+  })
+
   it('never selects an occupied or temporarily blocked point', () => {
     const board = boardWith({ 112: 'white', 111: 'black' })
     const result = findBestMove({

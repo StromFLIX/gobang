@@ -2,6 +2,7 @@ import { applyLocalMove, BOARD_SIZE, CELL_COUNT, opponent } from '@/logic/localG
 import type { Stone } from '@/types/game'
 
 const WIN_SCORE = 1_000_000_000
+const TACTICAL_EXTENSION_DEPTH = 4
 const PRIMARY_DIRECTIONS = [
   [0, 1],
   [1, 0],
@@ -44,6 +45,8 @@ interface TableEntry {
   flag: 'exact' | 'lower' | 'upper'
   bestMove: number | null
 }
+
+type PatternCell = Stone | 'blocked' | null
 
 class SearchTimeout extends Error {}
 
@@ -138,7 +141,16 @@ function alphaBeta(
 ): number {
   context.nodes += 1
   checkDeadline(context)
-  if (depth === 0) return evaluate(position.board, context.botStone)
+  if (depth === 0) {
+    return quiescence(
+      position,
+      initialAlpha,
+      initialBeta,
+      ply,
+      TACTICAL_EXTENSION_DEPTH,
+      context,
+    )
+  }
 
   const key = positionKey(position)
   const cached = context.table.get(key)
@@ -201,6 +213,138 @@ function alphaBeta(
     bestMove,
   })
   return score
+}
+
+function quiescence(
+  position: SearchPosition,
+  initialAlpha: number,
+  initialBeta: number,
+  ply: number,
+  remainingDepth: number,
+  context: SearchContext,
+): number {
+  checkDeadline(context)
+  const staticScore = evaluate(position, context.botStone)
+  if (remainingDepth === 0) return staticScore
+
+  const tactical = tacticalMoves(position, context)
+  if (tactical.forcedLoss) {
+    return position.turn === context.botStone ? -WIN_SCORE + ply : WIN_SCORE - ply
+  }
+  if (!tactical.moves.length) return staticScore
+
+  const maximizing = position.turn === context.botStone
+  let alpha = initialAlpha
+  let beta = initialBeta
+  let score = maximizing ? -Infinity : Infinity
+  for (const move of tactical.moves) {
+    const result = applyLocalMove(position.board, move, position.turn, position.blockedPositions)
+    let childScore: number
+    if (result.winner) {
+      childScore = result.winner === context.botStone ? WIN_SCORE - ply : -WIN_SCORE + ply
+    } else if (result.isDraw) {
+      childScore = 0
+    } else {
+      childScore = quiescence(
+        {
+          board: result.board,
+          turn: opponent(position.turn),
+          blockedPositions: result.captured,
+        },
+        alpha,
+        beta,
+        ply + 1,
+        remainingDepth - 1,
+        context,
+      )
+    }
+
+    score = maximizing ? Math.max(score, childScore) : Math.min(score, childScore)
+    if (maximizing) alpha = Math.max(alpha, score)
+    else beta = Math.min(beta, score)
+    if (alpha >= beta) break
+  }
+  return score
+}
+
+function tacticalMoves(position: SearchPosition, context: SearchContext) {
+  const enemy = opponent(position.turn)
+  const ownStoneCount = position.board.filter((cell) => cell === position.turn).length
+  const enemyStoneCount = position.board.filter((cell) => cell === enemy).length
+  if (ownStoneCount < 3 && enemyStoneCount < 4) {
+    return { moves: [], forcedLoss: false }
+  }
+
+  const candidates = orderedMoves(position).slice(0, 18)
+  const winningMoves = ownStoneCount >= 4
+    ? immediateWinningMoves(position, candidates, context)
+    : []
+  if (winningMoves.length) return { moves: winningMoves, forcedLoss: false }
+
+  const enemyPosition: SearchPosition = {
+    board: position.board,
+    turn: enemy,
+    blockedPositions: [],
+  }
+  const enemyWins = enemyStoneCount >= 4
+    ? immediateWinningMoves(
+        enemyPosition,
+        nearbyCandidates(enemyPosition),
+        context,
+      )
+    : []
+  if (enemyWins.length) {
+    const defenses = candidates.filter((move) => {
+      checkDeadline(context)
+      const result = applyLocalMove(
+        position.board,
+        move,
+        position.turn,
+        position.blockedPositions,
+      )
+      if (result.winner) return true
+      const replyPosition: SearchPosition = {
+        board: result.board,
+        turn: enemy,
+        blockedPositions: result.captured,
+      }
+      return immediateWinningMoves(
+        replyPosition,
+        nearbyCandidates(replyPosition),
+        context,
+      ).length === 0
+    })
+    return { moves: defenses, forcedLoss: defenses.length === 0 }
+  }
+
+  const forcingMoves = ownStoneCount >= 3 ? candidates.filter((move) => {
+    checkDeadline(context)
+    const result = applyLocalMove(
+      position.board,
+      move,
+      position.turn,
+      position.blockedPositions,
+    )
+    if (result.winner) return true
+    return localShapeScore(result.board, move, position.turn) >= 180_000
+  }) : []
+  return { moves: forcingMoves.slice(0, 8), forcedLoss: false }
+}
+
+function immediateWinningMoves(
+  position: SearchPosition,
+  candidates: readonly number[],
+  context: SearchContext,
+) {
+  return candidates.filter((move) => {
+    checkDeadline(context)
+    return applyLocalMove(
+      position.board,
+      move,
+      position.turn,
+      position.blockedPositions,
+    ).winner === position.turn
+  })
 }
 
 function orderedMoves(position: SearchPosition) {
@@ -288,60 +432,117 @@ function localShapeScore(board: readonly (Stone | null)[], position: number, sto
   const column = position % BOARD_SIZE
   let score = 0
   for (const [rowStep, columnStep] of PRIMARY_DIRECTIONS) {
-    let stones = 1
-    let openEnds = 0
-    for (const direction of [-1, 1]) {
-      let distance = 1
-      while (distance <= 4) {
-        const nextRow = row + rowStep * distance * direction
-        const nextColumn = column + columnStep * distance * direction
-        if (!inBounds(nextRow, nextColumn)) break
-        const cell = board[nextRow * BOARD_SIZE + nextColumn]
-        if (cell === stone) stones += 1
-        else {
-          if (cell === null) openEnds += 1
-          break
-        }
-        distance += 1
-      }
+    const cells: (Stone | null)[] = []
+    let centerIndex = -1
+    for (let distance = -5; distance <= 5; distance += 1) {
+      const nextRow = row + rowStep * distance
+      const nextColumn = column + columnStep * distance
+      if (!inBounds(nextRow, nextColumn)) continue
+      if (distance === 0) centerIndex = cells.length
+      cells.push(board[nextRow * BOARD_SIZE + nextColumn])
     }
-    score += shapeValue(stones, openEnds)
+    score += scoreWindows(cells, stone, centerIndex)
   }
   return score
 }
 
-function evaluate(board: readonly (Stone | null)[], botStone: Stone) {
-  return scoreStone(board, botStone) - scoreStone(board, opponent(botStone)) * 1.08
+function evaluate(position: SearchPosition, botStone: Stone) {
+  const blocked = new Set(position.blockedPositions)
+  const enemy = opponent(botStone)
+  return (
+    scoreStone(position.board, botStone, position.turn === botStone ? blocked : undefined) -
+    scoreStone(position.board, enemy, position.turn === enemy ? blocked : undefined) * 1.08
+  )
 }
 
-function scoreStone(board: readonly (Stone | null)[], stone: Stone) {
+function scoreStone(
+  board: readonly (Stone | null)[],
+  stone: Stone,
+  blockedPositions?: ReadonlySet<number>,
+) {
   let score = 0
   for (const line of LINES) {
     let index = 0
     while (index < line.length) {
-      if (board[line[index]] !== stone) {
+      if (cellForStone(board, line[index], blockedPositions) !== stone) {
         index += 1
         continue
       }
       const start = index
-      while (index < line.length && board[line[index]] === stone) index += 1
-      const openEnds = Number(start > 0 && board[line[start - 1]] === null)
-        + Number(index < line.length && board[line[index]] === null)
+      while (
+        index < line.length &&
+        cellForStone(board, line[index], blockedPositions) === stone
+      ) {
+        index += 1
+      }
+      const openEnds = Number(
+        start > 0 && cellForStone(board, line[start - 1], blockedPositions) === null,
+      ) + Number(
+        index < line.length && cellForStone(board, line[index], blockedPositions) === null,
+      )
       const runLength = index - start
       if (runLength >= 5) return WIN_SCORE
       score += shapeValue(runLength, openEnds)
     }
 
     for (let start = 0; start <= line.length - 5; start += 1) {
-      const window = line.slice(start, start + 5).map((position) => board[position])
-      if (window.some((cell) => cell === opponent(stone))) continue
-      const stoneCount = window.filter((cell) => cell === stone).length
-      if (stoneCount === 4) score += 140_000
-      else if (stoneCount === 3) score += 4_500
-      else if (stoneCount === 2) score += 160
+      const window = line
+        .slice(start, start + 5)
+        .map((position) => cellForStone(board, position, blockedPositions))
+      score += windowValue(window, stone)
+    }
+
+    for (let start = 0; start <= line.length - 6; start += 1) {
+      const window = line
+        .slice(start, start + 6)
+        .map((position) => cellForStone(board, position, blockedPositions))
+      score += openWindowValue(window, stone)
     }
   }
   return score
+}
+
+function scoreWindows(cells: readonly (Stone | null)[], stone: Stone, centerIndex: number) {
+  let score = 0
+  for (const length of [5, 6]) {
+    const firstStart = Math.max(0, centerIndex - length + 1)
+    const lastStart = Math.min(centerIndex, cells.length - length)
+    for (let start = firstStart; start <= lastStart; start += 1) {
+      const window = cells.slice(start, start + length)
+      score += length === 5 ? windowValue(window, stone) : openWindowValue(window, stone)
+    }
+  }
+  return score
+}
+
+function windowValue(window: readonly PatternCell[], stone: Stone) {
+  if (window.some((cell) => cell !== null && cell !== stone)) return 0
+  const stoneCount = window.filter((cell) => cell === stone).length
+  if (stoneCount === 5) return WIN_SCORE
+  if (stoneCount === 4) return 180_000
+  if (stoneCount === 3) return 6_000
+  if (stoneCount === 2) return 180
+  return 0
+}
+
+function openWindowValue(window: readonly PatternCell[], stone: Stone) {
+  if (window[0] !== null || window[window.length - 1] !== null) return 0
+  const middle = window.slice(1, -1)
+  if (middle.some((cell) => cell !== null && cell !== stone)) return 0
+  const stoneCount = middle.filter((cell) => cell === stone).length
+  if (stoneCount === 4) return 2_000_000
+  if (stoneCount === 3) return 30_000
+  if (stoneCount === 2) return 800
+  return 0
+}
+
+function cellForStone(
+  board: readonly (Stone | null)[],
+  position: number,
+  blockedPositions?: ReadonlySet<number>,
+): PatternCell {
+  if (blockedPositions?.has(position)) return 'blocked'
+  return board[position]
 }
 
 function shapeValue(stones: number, openEnds: number) {
