@@ -1454,6 +1454,11 @@
     grid-column: 1 / -1;
   }
 
+  .action-block .rematch-state {
+    justify-self: end;
+    text-align: right;
+  }
+
   .rules-block .section-kicker {
     grid-column: 1 / -1;
   }

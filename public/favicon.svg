@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Gobang board">
+  <rect width="128" height="128" rx="24" fill="#174b33" />
+  <rect x="14" y="14" width="100" height="100" rx="12" fill="#f4dfaa" />
+  <path d="M32 24v80M48 24v80M64 24v80M80 24v80M96 24v80M24 32h80M24 48h80M24 64h80M24 80h80M24 96h80" fill="none" stroke="#7d704f" stroke-width="3" stroke-linecap="round" />
+  <g fill="#17221c" stroke="#f4dfaa" stroke-width="2">
+    <circle cx="32" cy="96" r="9" />
+    <circle cx="48" cy="80" r="9" />
+    <circle cx="64" cy="64" r="9" />
+    <circle cx="80" cy="48" r="9" />
+    <circle cx="96" cy="32" r="9" />
+  </g>
+  <g fill="#fffdf5" stroke="#17221c" stroke-width="2">
+    <circle cx="32" cy="48" r="8" />
+    <circle cx="80" cy="96" r="8" />
+  </g>
+</svg>
