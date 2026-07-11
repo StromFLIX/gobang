@@ -12,12 +12,12 @@
 	}
 
 	handle_path /pb/* {
-		reverse_proxy pocketbase:8090 {
+		reverse_proxy {$POCKETBASE_UPSTREAM:pocketbase:8090} {
 			flush_interval -1
 		}
 	}
 
 	handle {
-		reverse_proxy app:8000
+		reverse_proxy {$APP_UPSTREAM:app:8000}
 	}
 }

@@ -240,20 +240,30 @@ npm run test:e2e
 
 ## Coolify
 
-1. Create a Docker Compose resource from this repository.
-2. Set `PB_SUPERUSER_EMAIL`, a long random `PB_SUPERUSER_PASSWORD`, `FIREBASE_CREDENTIALS_JSON`, `PB_SMTP_PASSWORD`, and `PB_GOOGLE_CLIENT_SECRET` as secrets. Set every required `LEGAL_*` value and the non-secret `PB_APP_*`, `PB_MAIL_*`, `PB_SMTP_*`, `PB_GOOGLE_AUTH_ENABLED`, and `PB_GOOGLE_CLIENT_ID` values documented above.
-3. Attach the public domain to the `caddy` service on port `80`.
-4. Keep the generated `pocketbase_data` volume persistent across deployments.
-5. Configure the health check against `/health` through the public domain.
+Production uses three Dockerfile Applications in the same project, environment, server, and Coolify destination network:
 
-TLS terminates at Coolify. Caddy handles internal same-origin routing and does not expose the PocketBase dashboard.
-Its configuration is baked into the Caddy image because Coolify deploys Compose files from an artifacts directory where repository-relative file mounts are not reliable.
-Do not add a host port mapping in Coolify; its proxy connects to Caddy on internal port `80`.
-Keep the services on Compose's default network. Coolify replaces that network with its proxy-connected resource network; adding another network makes Caddy multi-homed and can cause Traefik to select an unreachable container address.
+| Application | Build configuration | Port and health | Network aliases | Public domain |
+| --- | --- | --- | --- | --- |
+| `gobang-pocketbase` | Base directory `/pocketbase`, Dockerfile `/Dockerfile` | `8090`, `/api/health` | `gobang-pocketbase`, `pocketbase` | None |
+| `gobang-app` | Base directory `/`, Dockerfile `/Dockerfile` | `8000`, `/health` | `gobang-app`, `app` | None |
+| `gobang-edge` | Base directory `/`, Dockerfile `/Caddy.Dockerfile` | `80`, `/health` | `gobang-edge` | Production and validation domains |
 
-Coolify replaces this Compose stack with a stop/start cutover. During deployment, its proxy can briefly return `503 no available server` after the old Caddy container stops and before the replacement passes its health check. Startup health checks run every second to minimize that interval, then return to a ten-second cadence. True zero-downtime deployment requires moving the persistent PocketBase service out of this stack and deploying the stateless app/proxy separately so old and new web containers can overlap.
+Do not add host port mappings, fixed IP addresses, custom internal names, or consistent container names to `gobang-app` or `gobang-edge`. Coolify can then start a versioned replacement, wait for its health check, and remove the old container after the new one is healthy. Keep auto-deploy disabled until this rolling behavior has been validated on the destination.
 
-The public domain must be assigned only to the `caddy` service. Leave domains blank for `app` and `pocketbase`; assigning the domain to `app` bypasses `/pb` routing and breaks realtime subscriptions.
+PocketBase is stateful and must not run overlapping writable containers. Mount one persistent volume at `/pb/pb_data`, stop PocketBase before replacing its container, and keep deployments manual. Take and restore-test a stopped-volume snapshot before migrations or infrastructure changes. Never mount the same PocketBase volume into two running containers.
+
+Configure environments by ownership:
+
+- PocketBase runtime: `PB_SUPERUSER_*`, `PB_APP_*`, `PB_MAIL_*`, `PB_SMTP_*`, and `PB_GOOGLE_*`.
+- App runtime: `POCKETBASE_URL=http://gobang-pocketbase:8090`, `PB_SUPERUSER_*`, `FRONTEND_DIST=/app/frontend_dist`, `FIREBASE_CREDENTIALS_JSON`, `LEGAL_STREET_ADDRESS`, `LEGAL_POSTAL_CITY`, and `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS`.
+- App build time only: the seven `VITE_LEGAL_*` values consumed by the root Dockerfile.
+- Edge runtime: `APP_UPSTREAM=gobang-app:8000` and `POCKETBASE_UPSTREAM=gobang-pocketbase:8090`.
+
+Only `gobang-edge` receives domains. TLS terminates at Coolify, then Caddy preserves same-origin `/api` and `/pb` routing, PocketBase realtime streaming, OAuth redirects, and the protected PocketBase administration routes. Assigning a domain to the app or PocketBase bypasses those controls.
+
+The compatibility aliases `app` and `pocketbase` allow an edge image from before the configurable-upstream change to reach the split Applications during migration. New deployments should use the explicit `gobang-*` aliases through the edge environment variables.
+
+For the legacy Compose deployment, keep services only on Compose's Coolify-managed resource network. Adding another network makes Caddy multi-homed and can cause Traefik to select an unreachable container address. Local development continues to use Compose's default network and the Caddy upstream defaults.
 
 ## Search indexing
 
