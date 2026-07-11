@@ -154,6 +154,22 @@ class PocketBaseClient:
         )
         return await self.login(email, password)
 
+    async def promote_google_guest(
+        self, player_id: str, session: PlayerSession
+    ) -> PlayerSession:
+        if (
+            session.player.id != player_id
+            or not session.player.is_guest
+            or not await self._has_google_auth(player_id)
+        ):
+            raise PocketBaseError(401, "Google account does not match this guest")
+        record = await self.admin_request(
+            "PATCH",
+            f"/api/collections/players/records/{player_id}",
+            json={"is_guest": False},
+        )
+        return PlayerSession(token=session.token, player=_player_from_record(record))
+
     async def delete_account(
         self,
         player_id: str,

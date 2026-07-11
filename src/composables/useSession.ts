@@ -159,6 +159,7 @@ async function runGoogleAuth(
   avatarSeed: string,
 ) {
   const initialDisplayName = displayName.trim() || 'Player'
+  const activeToken = token.value
   let oauthComplete = false
   const browserFinished = isNativeApp
     ? await Browser.addListener('browserFinished', () => {
@@ -166,6 +167,7 @@ async function runGoogleAuth(
       })
     : null
   try {
+    setRealtimeToken('')
     const result = await authenticateWithGoogle(
       initialDisplayName,
       avatarSeed,
@@ -175,6 +177,9 @@ async function runGoogleAuth(
     )
     oauthComplete = true
     return result
+  } catch (authError) {
+    setRealtimeToken(activeToken)
+    throw authError
   } finally {
     await browserFinished?.remove()
   }
@@ -191,8 +196,15 @@ async function loginWithGoogle(
   let session = result.session
   let transferredGames = 0
   try {
-    if (mergeGuestProgress && player.value?.is_guest) {
-      const merged = await api.mergeGoogle(result.session.token)
+    if (session.player.is_guest) {
+      session = await api.completeGoogle(session.token)
+    }
+    if (
+      mergeGuestProgress
+      && player.value?.is_guest
+      && player.value.id !== session.player.id
+    ) {
+      const merged = await api.mergeGoogle(session.token)
       session = merged
       transferredGames = merged.transferred_games
     }

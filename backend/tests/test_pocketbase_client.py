@@ -1,8 +1,9 @@
 import httpx
 import pytest
 
-from app.clients.pocketbase import PocketBaseClient, PocketBaseError
+from app.clients.pocketbase import PlayerSession, PocketBaseClient, PocketBaseError
 from app.config import Settings
+from app.domain.game import Player
 
 
 @pytest.mark.asyncio
@@ -34,6 +35,56 @@ async def test_verification_uses_pocketbase_auth_endpoints() -> None:
             "/api/collections/players/confirm-verification",
             b'{"token":"verification-token"}',
         ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_promote_google_guest_requires_linked_google_auth() -> None:
+    requests: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/api/collections/_superusers/auth-with-password":
+            return httpx.Response(200, json={"token": "admin-token"})
+        if request.url.path == "/api/collections/_externalAuths/records":
+            assert request.url.params["filter"] == (
+                'recordRef = "guest-id" && provider = "google"'
+            )
+            return httpx.Response(200, json={"items": [{"provider": "google"}]})
+        if request.url.path == "/api/collections/players/records/guest-id":
+            assert request.method == "PATCH"
+            assert request.content == b'{"is_guest":false}'
+            return httpx.Response(
+                200,
+                json={
+                    "id": "guest-id",
+                    "display_name": "Guest",
+                    "avatar_seed": "guest",
+                    "is_guest": False,
+                },
+            )
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    http_client = httpx.AsyncClient(
+        base_url="http://pocketbase.test",
+        transport=httpx.MockTransport(handle),
+    )
+    client = PocketBaseClient(Settings(), http_client)
+
+    promoted = await client.promote_google_guest(
+        "guest-id",
+        PlayerSession(
+            "google-token",
+            Player("guest-id", "Guest", "guest", is_guest=True),
+        ),
+    )
+    await http_client.aclose()
+
+    assert promoted.token == "google-token"
+    assert promoted.player.is_guest is False
+    assert [request.url.path for request in requests[-2:]] == [
+        "/api/collections/_externalAuths/records",
+        "/api/collections/players/records/guest-id",
     ]
 
 

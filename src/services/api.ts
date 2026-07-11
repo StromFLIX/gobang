@@ -78,6 +78,11 @@ export const api = {
       '/api/auth/merge-google',
       json('POST', { google_token: googleToken }),
     ),
+  completeGoogle: (googleToken: string) =>
+    request<AuthSession>(
+      '/api/auth/complete-google',
+      json('POST', { google_token: googleToken }),
+    ),
   getMe: () => request<Player>('/api/auth/me'),
   updateProfile: (displayName: string, avatarSeed: string) =>
     request<Player>(

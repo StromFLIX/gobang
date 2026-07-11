@@ -179,6 +179,8 @@ class FakePocketBase:
             "third-token": Player("third", "Third", "third"),
             "account-token": Player("account", "Account", "account", is_guest=False),
             "google-token": Player("google", "Google", "google", is_guest=False),
+            "linked-google-token": Player("guest", "Felix", "felix"),
+            "other-linked-google-token": Player("old-guest", "Old guest", "old-guest"),
             "rival-token": Player("rival", "Rival", "rival", is_guest=False),
         }
 
@@ -231,6 +233,17 @@ class FakePocketBase:
         registered = replace(self.players[token], is_guest=False)
         self.players[token] = registered
         return PlayerSession("registered-token", registered)
+
+    async def promote_google_guest(
+        self, player_id: str, session: PlayerSession
+    ) -> PlayerSession:
+        if session.player.id != player_id or not session.player.is_guest:
+            raise PocketBaseError(401, "Google account does not match this guest")
+        registered = replace(session.player, is_guest=False)
+        for token, player in self.players.items():
+            if player.id == player_id:
+                self.players[token] = registered
+        return PlayerSession(session.token, registered)
 
     async def delete_account(
         self,
@@ -505,6 +518,69 @@ def test_guest_progress_can_be_merged_into_verified_google_account() -> None:
                 "id": "google",
                 "display_name": "Google",
                 "avatar_seed": "google",
+                "is_guest": False,
+            },
+            "transferred_games": 0,
+            "skipped_games": 0,
+        }
+
+
+def test_guest_already_linked_to_google_is_promoted_in_place() -> None:
+    with make_client() as client:
+        response = client.post(
+            "/api/auth/merge-google",
+            headers={"Authorization": "Bearer guest-token"},
+            json={"google_token": "linked-google-token"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "token": "linked-google-token",
+            "player": {
+                "id": "guest",
+                "display_name": "Felix",
+                "avatar_seed": "felix",
+                "is_guest": False,
+            },
+            "transferred_games": 0,
+            "skipped_games": 0,
+        }
+
+
+def test_google_linked_guest_can_be_completed_without_a_current_session() -> None:
+    with make_client() as client:
+        response = client.post(
+            "/api/auth/complete-google",
+            json={"google_token": "linked-google-token"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "token": "linked-google-token",
+            "player": {
+                "id": "guest",
+                "display_name": "Felix",
+                "avatar_seed": "felix",
+                "is_guest": False,
+            },
+        }
+
+
+def test_google_linked_guest_from_another_session_is_promoted_then_merged() -> None:
+    with make_client() as client:
+        response = client.post(
+            "/api/auth/merge-google",
+            headers={"Authorization": "Bearer guest-token"},
+            json={"google_token": "other-linked-google-token"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "token": "other-linked-google-token",
+            "player": {
+                "id": "old-guest",
+                "display_name": "Old guest",
+                "avatar_seed": "old-guest",
                 "is_guest": False,
             },
             "transferred_games": 0,

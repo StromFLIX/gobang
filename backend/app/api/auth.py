@@ -100,10 +100,28 @@ async def merge_google(
     if not player.is_guest:
         raise HTTPException(status.HTTP_409_CONFLICT, "Only guest progress can be merged")
     session = await pocketbase.verify_player(body.google_token)
-    if session.player.is_guest or session.player.id == player.id:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Sign in to a registered Google account")
+    if session.player.is_guest:
+        session = await pocketbase.promote_google_guest(session.player.id, session)
+    if session.player.id == player.id:
+        return MergedAuthResponse(
+            token=session.token,
+            player=PlayerResponse.from_domain(session.player),
+            transferred_games=0,
+            skipped_games=0,
+        )
     merge = await games.merge_player(player.id, session.player)
     return MergedAuthResponse.from_merge(session, merge)
+
+
+@router.post("/complete-google", response_model=AuthResponse)
+async def complete_google(
+    body: GoogleAuthRequest,
+    pocketbase: PocketBaseDependency,
+) -> AuthResponse:
+    session = await pocketbase.verify_player(body.google_token)
+    if session.player.is_guest:
+        session = await pocketbase.promote_google_guest(session.player.id, session)
+    return AuthResponse.from_session(session)
 
 
 @router.get("/me", response_model=PlayerResponse)
