@@ -20,7 +20,7 @@ RUN chmod +x /pb/entrypoint.sh
 
 EXPOSE 8090
 
-HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --start-interval=1s --retries=5 \
     CMD wget -q --spider http://127.0.0.1:8090/api/health || exit 1
 
 CMD ["/pb/entrypoint.sh"]

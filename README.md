@@ -23,7 +23,7 @@ docker compose up --build
 
 Open `http://localhost:8080`. The first browser starts a game and shares its `/game/<invite-code>` link with the second player.
 
-Local port `8080` is published by `compose.override.yaml`, which Docker Compose loads automatically. The production Compose file exposes Caddy only to Docker networks so Coolify can perform rolling deployments without competing for a fixed host port.
+Local port `8080` is published by `compose.override.yaml`, which Docker Compose loads automatically. The production Compose file exposes Caddy only to Docker networks so Coolify can route to it without competing for a fixed host port.
 
 PocketBase data is stored in the `pocketbase_data` volume. Do not remove that volume during updates.
 
@@ -249,6 +249,8 @@ npm run test:e2e
 TLS terminates at Coolify. Caddy handles internal same-origin routing and does not expose the PocketBase dashboard.
 Its configuration is baked into the Caddy image because Coolify deploys Compose files from an artifacts directory where repository-relative file mounts are not reliable.
 Do not add a host port mapping in Coolify; its proxy connects to Caddy on internal port `80`.
+
+Coolify replaces this Compose stack with a stop/start cutover. During deployment, its proxy can briefly return `503 no available server` after the old Caddy container stops and before the replacement passes its health check. Startup health checks run every second to minimize that interval, then return to a ten-second cadence. True zero-downtime deployment requires moving the persistent PocketBase service out of this stack and deploying the stateless app/proxy separately so old and new web containers can overlap.
 
 The public domain must be assigned only to the `caddy` service. Leave domains blank for `app` and `pocketbase`; assigning the domain to `app` bypasses `/pb` routing and breaks realtime subscriptions.
 
