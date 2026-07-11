@@ -92,6 +92,16 @@ import {
             reliable game.
           </li>
           <li>
+            <strong>Aggregate service usage:</strong> the production website and Android app send a
+            canonical page route and page title to the controller's Umami service to count visits
+            and page views. Query parameters, URL fragments, invitation codes, account identifiers,
+            and gameplay events are not sent. The analytics request necessarily includes technical
+            connection data such as the IP address and browser user agent. Where the GDPR applies,
+            Article 6(1)(f) covers the legitimate interest in understanding basic service usage with
+            a cookieless, data-minimized system. Browser Do Not Track settings are respected, and
+            you may also object by contacting the controller.
+          </li>
+          <li>
             <strong>Legal obligations:</strong> information may be preserved or disclosed where the
             controller is legally required to do so. Where the GDPR applies, the basis is Article
             6(1)(c).
@@ -107,8 +117,8 @@ import {
           cannot be provided. Google sign-in is optional because email and password remain
           available. The website can create a temporary guest profile without an email address.
           Push notifications are optional; refusing permission does not prevent gameplay. Gobang
-          does not use advertising, behavioral analytics, payments, or data brokerage. This notice
-          will be updated before any planned payment feature is enabled.
+          does not use advertising, behavioral profiling, analytics cookies, payments, or data
+          brokerage. This notice will be updated before any planned payment feature is enabled.
         </p>
       </section>
 
@@ -141,6 +151,14 @@ import {
           payload containing an event type, an in-app path, and possibly another player's display
           name. Firebase Analytics is not included.
         </p>
+        <p>
+          Basic website and Android app usage is measured with a controller-operated Umami service
+          at
+          <a href="https://umami.stromflix.com" target="_blank" rel="noreferrer">
+            umami.stromflix.com</a
+          >. No analytics data is shared with Google or advertising providers. The tracker runs in
+          the production website and Android app, but not during local browser development.
+        </p>
       </section>
 
       <section>
@@ -166,8 +184,10 @@ import {
           presence records expire when they are no longer needed for the active queue or online
           count. Push tokens are removed on sign-out or account deletion and invalid tokens are
           removed after Firebase rejects them. Operational logs are rotated based on storage limits
-          and retained only as long as needed to investigate reliability or security events. Data
-          required for a legal claim or obligation may be retained until that purpose expires.
+          and retained only as long as needed to investigate reliability or security events.
+          Aggregate usage records are retained only while needed to compare short-term usage trends
+          and are then deleted. Data required for a legal claim or obligation may be retained until
+          that purpose expires.
         </p>
         <p>
           Account deletion erases the profile, authentication record, notification devices,

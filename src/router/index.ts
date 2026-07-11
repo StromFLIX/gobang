@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
+import { trackPageView } from '../services/analytics'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -75,6 +76,9 @@ router.onError((error, to) => {
 router.afterEach((route) => {
   sessionStorage.removeItem(CHUNK_RELOAD_KEY)
   document.title = String(route.meta.title ?? 'Gobang')
+
+  const routeTemplate = route.matched[route.matched.length - 1]?.path
+  if (routeTemplate) trackPageView(routeTemplate, document.title)
 
   const description = document.head.querySelector<HTMLMetaElement>('meta[name="description"]')
   if (description) {
