@@ -3,6 +3,10 @@ import HomeView from '../views/HomeView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  scrollBehavior(to) {
+    if (to.hash) return { el: to.hash, top: 80, behavior: 'smooth' }
+    return { top: 0 }
+  },
   routes: [
     {
       path: '/',
@@ -15,10 +19,21 @@ const router = createRouter({
       component: () => import('../views/GameView.vue'),
     },
     {
+      path: '/account',
+      name: 'account',
+      component: () => import('../views/AccountView.vue'),
+    },
+    {
       path: '/privacy',
       name: 'privacy',
       component: () => import('../views/PrivacyView.vue'),
-      meta: { public: true },
+      meta: { public: true, noIndex: true },
+    },
+    {
+      path: '/impressum',
+      name: 'impressum',
+      component: () => import('../views/ImprintView.vue'),
+      meta: { public: true, noIndex: true },
     },
     {
       path: '/account-deletion',

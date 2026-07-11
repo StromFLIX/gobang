@@ -11,6 +11,7 @@ const router = useRouter()
 const route = useRoute()
 const { player, ready, bootstrapSession } = useSession()
 const isPublicRoute = computed(() => route.meta.public === true)
+const isNoIndexRoute = computed(() => route.meta.noIndex === true)
 
 void router.isReady().then(() => {
   if (!isPublicRoute.value) void bootstrapSession()
@@ -19,6 +20,24 @@ void router.isReady().then(() => {
 watch(isPublicRoute, (publicRoute) => {
   if (!publicRoute) void bootstrapSession()
 })
+
+watch(
+  isNoIndexRoute,
+  (noIndex) => {
+    const selector = 'meta[name="robots"][data-gobang-managed]'
+    const existing = document.head.querySelector<HTMLMetaElement>(selector)
+    if (!noIndex) {
+      existing?.remove()
+      return
+    }
+    const meta = existing ?? document.createElement('meta')
+    meta.name = 'robots'
+    meta.content = 'noindex, nofollow, noarchive, nosnippet'
+    meta.dataset.gobangManaged = ''
+    if (!existing) document.head.append(meta)
+  },
+  { immediate: true },
+)
 
 watch(
   player,

@@ -3,6 +3,7 @@ import { ArrowLeft, Check, Grid3X3, Trash2 } from '@lucide/vue'
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import SiteFooter from '@/components/SiteFooter.vue'
 import { useSession } from '@/composables/useSession'
 import { ApiError } from '@/services/api'
 
@@ -101,12 +102,15 @@ async function submit() {
         </button>
       </form>
     </main>
+    <SiteFooter />
   </div>
 </template>
 
 <style scoped>
 .deletion-shell {
+  display: flex;
   min-height: 100dvh;
+  flex-direction: column;
   background-color: var(--color-background);
   background-image: linear-gradient(rgba(36, 102, 70, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(36, 102, 70, 0.035) 1px, transparent 1px);
@@ -126,6 +130,7 @@ async function submit() {
 .deletion-layout {
   display: grid;
   width: min(100% - 2rem, 58rem);
+  flex: 1;
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
   gap: clamp(2rem, 7vw, 5rem);
   align-items: start;

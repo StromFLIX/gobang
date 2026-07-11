@@ -10,6 +10,7 @@ import {
   Plus,
   Radio,
   Search,
+  Settings,
   Swords,
   Timer,
   Trash2,
@@ -21,10 +22,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
 import AvatarImage from '@/components/AvatarImage.vue'
-import AvatarPicker from '@/components/AvatarPicker.vue'
 import InvitationInbox from '@/components/InvitationInbox.vue'
 import LeaderboardPanel from '@/components/LeaderboardPanel.vue'
 import LobbyMatchReplay from '@/components/LobbyMatchReplay.vue'
+import SiteFooter from '@/components/SiteFooter.vue'
 import { useInvitations } from '@/composables/useInvitations'
 import { usePresence } from '@/composables/usePresence'
 import { useSession } from '@/composables/useSession'
@@ -42,16 +43,7 @@ import { subscribeToGame } from '@/services/pocketbase'
 import type { Game, Leaderboard, MatchmakingTicket } from '@/types/game'
 
 const router = useRouter()
-const {
-  player,
-  ready,
-  bootstrapSession,
-  updateProfile,
-  register,
-  login,
-  logout,
-  deleteAccount,
-} = useSession()
+const { player, ready, bootstrapSession, updateProfile, logout } = useSession()
 const {
   invitations,
   loading: invitationsLoading,
@@ -73,21 +65,9 @@ const leaderboardLoading = ref(false)
 const leaderboardError = ref('')
 const busy = ref(false)
 const pageError = ref('')
-const authOpen = ref(false)
-const authMode = ref<'login' | 'register'>('register')
-const authNeedsPlayerName = ref(false)
-const mergePrompt = ref(false)
-const email = ref('')
-const password = ref('')
-const passwordConfirm = ref('')
-const authError = ref('')
-const mergeNotice = ref('')
-const profileEditing = ref(false)
 const profileSaving = ref(false)
-const deleteAccountOpen = ref(false)
-const deleteAccountPassword = ref('')
-const deleteAccountError = ref('')
-const deleteAccountBusy = ref(false)
+const accountMenuOpen = ref(false)
+const accountMenuRef = ref<HTMLElement | null>(null)
 const showAllOpponents = ref(false)
 const matchmakingOpen = ref(false)
 const matchmakingTicket = ref<MatchmakingTicket | null>(null)
@@ -119,13 +99,6 @@ const outgoingPendingPlayerIds = computed(() =>
     .filter((invitation) => invitation.challenger.id === player.value?.id)
     .map((invitation) => invitation.recipient.id),
 )
-const guestGameLabel = computed(() =>
-  games.value.length === 1 ? '1 game' : `${games.value.length} games`,
-)
-const authTitle = computed(() => {
-  if (mergePrompt.value) return 'Keep your current games?'
-  return authMode.value === 'register' ? 'Create account' : 'Sign in'
-})
 const matchmakingElapsedLabel = computed(() => {
   const minutes = Math.floor(matchmakingElapsed.value / 60)
   const seconds = matchmakingElapsed.value % 60
@@ -143,6 +116,8 @@ watch(
 )
 
 onMounted(async () => {
+  document.addEventListener('pointerdown', handleAccountMenuPointerDown)
+  document.addEventListener('keydown', handleAccountMenuKeydown)
   await bootstrapSession()
   startPresence()
   await Promise.all([loadGames(), loadLeaderboard()])
@@ -152,6 +127,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleAccountMenuPointerDown)
+  document.removeEventListener('keydown', handleAccountMenuKeydown)
   clearGameSubscriptions()
   stopMatchmakingTimers()
   void stopInvitationUpdates()
@@ -260,7 +237,6 @@ function saveProfile() {
   profileSavePromise = (async () => {
     try {
       await updateProfile(name, avatarSeed.value)
-      profileEditing.value = false
       pageError.value = ''
       return true
     } catch (error) {
@@ -275,26 +251,21 @@ function saveProfile() {
 }
 
 async function ensureProfile() {
-  if (hasPlayerName.value && !profileEditing.value) return true
+  if (hasPlayerName.value) return true
   return saveProfile()
 }
 
-function editProfile() {
-  if (!player.value) return
-  if (hasPlayerName.value) {
-    displayName.value = player.value.display_name
-    avatarSeed.value = player.value.avatar_seed
-  }
-  pageError.value = ''
-  profileEditing.value = true
+function handleAccountMenuPointerDown(event: PointerEvent) {
+  if (!accountMenuRef.value?.contains(event.target as Node)) accountMenuOpen.value = false
 }
 
-function cancelProfileEdit() {
-  if (!player.value) return
-  displayName.value = player.value.display_name
-  avatarSeed.value = player.value.avatar_seed
-  pageError.value = ''
-  profileEditing.value = false
+function handleAccountMenuKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') accountMenuOpen.value = false
+}
+
+function openAccount(mode: 'profile' | 'register' | 'login', hash = '') {
+  accountMenuOpen.value = false
+  void router.push({ name: 'account', query: { mode }, hash })
 }
 
 async function startGame() {
@@ -313,7 +284,7 @@ async function startGame() {
 
 async function startRankedMatchmaking() {
   if (player.value?.is_guest) {
-    openAuth('register')
+    openAccount('register')
     return
   }
   if (matchmakingBusy.value || !(await ensureProfile())) return
@@ -446,74 +417,8 @@ async function joinGame() {
   await router.push(`/game/${encodeURIComponent(code)}`)
 }
 
-function openAuth(mode: 'login' | 'register') {
-  authMode.value = mode
-  authNeedsPlayerName.value = mode === 'register' && !hasPlayerName.value
-  mergePrompt.value = false
-  authError.value = ''
-  password.value = ''
-  passwordConfirm.value = ''
-  authOpen.value = true
-}
-
-function setAuthMode(mode: 'login' | 'register') {
-  authMode.value = mode
-  authNeedsPlayerName.value = mode === 'register' && !hasPlayerName.value
-  mergePrompt.value = false
-  authError.value = ''
-}
-
-async function submitAuth() {
-  authError.value = ''
-  if (authMode.value === 'register' && password.value !== passwordConfirm.value) {
-    authError.value = 'Passwords do not match.'
-    return
-  }
-  if (authMode.value === 'register' && authNeedsPlayerName.value && !(await saveProfile())) {
-    authError.value = pageError.value || 'Choose a player name first.'
-    return
-  }
-  authNeedsPlayerName.value = false
-  if (authMode.value === 'login' && player.value?.is_guest) {
-    await loadGames()
-    if (games.value.length > 0) {
-      mergePrompt.value = true
-      return
-    }
-  }
-  await finishAuth(false)
-}
-
-async function finishAuth(mergeGuestProgress: boolean) {
-  authError.value = ''
-  busy.value = true
-  try {
-    let mergeResult = null
-    if (authMode.value === 'register') {
-      await register(email.value, password.value)
-    } else {
-      mergeResult = await login(email.value, password.value, mergeGuestProgress)
-    }
-    authOpen.value = false
-    profileEditing.value = false
-    if (mergeResult) {
-      const moved = `${mergeResult.transferredGames} ${mergeResult.transferredGames === 1 ? 'game' : 'games'} moved to your account.`
-      mergeNotice.value = mergeResult.skippedGames
-        ? `${moved} ${mergeResult.skippedGames} ${mergeResult.skippedGames === 1 ? 'game was' : 'games were'} already against this account and stayed unchanged.`
-        : moved
-    }
-    await Promise.all([loadGames(), loadLeaderboard()])
-    await startInvitationUpdates(handleInvitationUpdate)
-    await presenceHeartbeat()
-    await restoreMatchmaking()
-  } catch (error) {
-    authError.value = error instanceof ApiError ? error.message : 'Could not sign in.'
-  } finally {
-    busy.value = false
-  }
-}
-
 async function signOut() {
+  accountMenuOpen.value = false
   clearGameSubscriptions()
   stopMatchmakingTimers()
   await stopInvitationUpdates()
@@ -529,37 +434,7 @@ async function signOut() {
   await logout()
   games.value = []
   if (isNativeApp) return
-  profileEditing.value = true
   await Promise.all([loadLeaderboard(), presenceHeartbeat()])
-}
-
-function openDeleteAccount() {
-  deleteAccountPassword.value = ''
-  deleteAccountError.value = ''
-  deleteAccountOpen.value = true
-}
-
-async function confirmDeleteAccount() {
-  deleteAccountError.value = ''
-  deleteAccountBusy.value = true
-  try {
-    clearGameSubscriptions()
-    stopMatchmakingTimers()
-    await stopInvitationUpdates()
-    await deleteAccount(deleteAccountPassword.value)
-    deleteAccountOpen.value = false
-    games.value = []
-    leaderboard.value = null
-    if (!isNativeApp) {
-      profileEditing.value = true
-      await Promise.all([loadLeaderboard(), presenceHeartbeat()])
-    }
-  } catch (error) {
-    deleteAccountError.value =
-      error instanceof ApiError ? error.message : 'Could not delete this account.'
-  } finally {
-    deleteAccountBusy.value = false
-  }
 }
 
 function gameFor(group: OpponentGameGroup) {
@@ -594,39 +469,58 @@ function groupSummary(group: OpponentGameGroup) {
           @accept="acceptChallenge"
           @dismiss="dismissChallenge"
         />
-        <button
-          type="button"
-          class="account-avatar-button"
-          title="Edit player"
-          aria-label="Edit player"
-          @click="editProfile"
-        >
-          <AvatarImage :seed="player.avatar_seed" size="medium" />
-        </button>
+        <div ref="accountMenuRef" class="account-menu-wrap">
+          <button
+            type="button"
+            class="account-avatar-button"
+            title="Account menu"
+            aria-label="Account menu"
+            aria-haspopup="menu"
+            :aria-expanded="accountMenuOpen"
+            @click="accountMenuOpen = !accountMenuOpen"
+          >
+            <AvatarImage :seed="player.avatar_seed" size="medium" />
+          </button>
+          <div v-if="accountMenuOpen" class="account-menu" role="menu">
+            <div class="account-menu__identity">
+              <strong>{{ player.display_name }}</strong>
+              <small>{{ player.is_guest ? 'Guest player' : shortPlayerId(player.id) }}</small>
+            </div>
+            <button type="button" role="menuitem" @click="openAccount('profile')">
+              <Settings :size="17" />
+              Edit player
+            </button>
+            <template v-if="player.is_guest">
+              <button type="button" role="menuitem" @click="openAccount('register')">
+                <UserPlus :size="17" />
+                Create account
+              </button>
+              <button type="button" role="menuitem" @click="openAccount('login')">
+                <LogIn :size="17" />
+                Sign in
+              </button>
+            </template>
+            <template v-else>
+              <button
+                type="button"
+                class="account-menu__danger"
+                role="menuitem"
+                @click="openAccount('profile', '#delete')"
+              >
+                <Trash2 :size="17" />
+                Delete account
+              </button>
+              <button type="button" role="menuitem" @click="signOut">
+                <LogOut :size="17" />
+                Sign out
+              </button>
+            </template>
+          </div>
+        </div>
         <span class="account-summary__identity">
           <strong class="account-summary__name">{{ player.display_name }}</strong>
           <small>{{ shortPlayerId(player.id) }}</small>
         </span>
-        <button
-          v-if="player.is_guest"
-          type="button"
-          class="button button--quiet header-auth-button"
-          @click="openAuth('login')"
-        >
-          <LogIn :size="17" />
-          Sign in
-        </button>
-        <button
-          v-else
-          type="button"
-          class="button button--quiet header-auth-button"
-          title="Sign out"
-          aria-label="Sign out"
-          @click="signOut"
-        >
-          <LogOut :size="18" />
-          Sign out
-        </button>
       </div>
     </header>
 
@@ -691,11 +585,11 @@ function groupSummary(group: OpponentGameGroup) {
             </div>
 
             <div v-if="player.is_guest" class="lobby-choice__actions">
-              <button type="button" class="button button--primary" @click="openAuth('register')">
+              <button type="button" class="button button--primary" @click="openAccount('register')">
                 <UserPlus :size="18" />
                 Create account
               </button>
-              <button type="button" class="button button--secondary" @click="openAuth('login')">
+              <button type="button" class="button button--secondary" @click="openAccount('login')">
                 <LogIn :size="18" />
                 Sign in
               </button>
@@ -755,75 +649,6 @@ function groupSummary(group: OpponentGameGroup) {
           </section>
 
           <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
-        </div>
-      </section>
-
-      <p v-if="mergeNotice" class="merge-notice" role="status">{{ mergeNotice }}</p>
-
-      <section
-        v-if="profileEditing"
-        class="profile-tool profile-tool--editor"
-        aria-labelledby="profile-title"
-      >
-        <div class="section-heading-row">
-          <div>
-            <p class="section-kicker">Player</p>
-            <h2 id="profile-title">Name and avatar</h2>
-          </div>
-          <span class="session-badge">{{ player.is_guest ? 'This device' : 'Account' }}</span>
-        </div>
-
-        <label class="field-label" for="player-name">Name</label>
-        <input
-          id="player-name"
-          v-model="displayName"
-          class="text-input"
-          maxlength="24"
-          autocomplete="nickname"
-          placeholder="Your name"
-          @change="pageError = ''"
-        />
-
-        <span class="field-label">Avatar</span>
-        <AvatarPicker v-model="avatarSeed" />
-
-        <p v-if="pageError" class="form-error" role="alert">{{ pageError }}</p>
-        <div class="profile-actions">
-          <button
-            type="button"
-            class="button button--secondary"
-            :disabled="profileSaving"
-            @click="saveProfile"
-          >
-            Save player
-          </button>
-          <button
-            v-if="hasPlayerName"
-            type="button"
-            class="button button--quiet"
-            :disabled="profileSaving"
-            @click="cancelProfileEdit"
-          >
-            Cancel
-          </button>
-        </div>
-        <div v-if="!player.is_guest" class="account-danger-zone">
-          <div>
-            <strong>Delete account</strong>
-            <p>Erase your profile, games, scores, invitations, and notification devices.</p>
-          </div>
-          <div class="account-danger-zone__actions">
-            <RouterLink to="/privacy" class="button button--quiet">Privacy policy</RouterLink>
-            <button
-              type="button"
-              class="button button--danger-quiet"
-              :disabled="profileSaving"
-              @click="openDeleteAccount"
-            >
-              <Trash2 :size="17" />
-              Delete account
-            </button>
-          </div>
         </div>
       </section>
 
@@ -899,7 +724,7 @@ function groupSummary(group: OpponentGameGroup) {
 
       <div v-if="player.is_guest && hasPlayerName" class="account-nudge">
         <span>Sign in to keep these games when you switch devices.</span>
-        <button type="button" class="button button--quiet" @click="openAuth('login')">
+        <button type="button" class="button button--quiet" @click="openAccount('login')">
           <LogIn :size="16" />
           Sign in
         </button>
@@ -982,188 +807,6 @@ function groupSummary(group: OpponentGameGroup) {
       </section>
     </div>
 
-    <div v-if="authOpen" class="modal-backdrop" @click.self="authOpen = false">
-      <section class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-        <div class="dialog-header">
-          <div>
-            <p class="section-kicker">Account</p>
-            <h2 id="auth-title">{{ authTitle }}</h2>
-          </div>
-          <button
-            type="button"
-            class="icon-button icon-button--muted"
-            title="Close"
-            aria-label="Close"
-            @click="authOpen = false"
-          >
-            <X :size="19" />
-          </button>
-        </div>
-
-        <div v-if="!mergePrompt" class="segmented-control" aria-label="Account action">
-          <button
-            type="button"
-            :class="{ active: authMode === 'register' }"
-            @click="setAuthMode('register')"
-          >
-            Create account
-          </button>
-          <button
-            type="button"
-            :class="{ active: authMode === 'login' }"
-            @click="setAuthMode('login')"
-          >
-            Sign in
-          </button>
-        </div>
-
-        <form v-if="!mergePrompt" class="auth-form" @submit.prevent="submitAuth">
-          <template v-if="authMode === 'register' && authNeedsPlayerName">
-            <label class="field-label" for="account-player-name">Player name</label>
-            <input
-              id="account-player-name"
-              v-model="displayName"
-              class="text-input"
-              maxlength="24"
-              required
-              autocomplete="nickname"
-            />
-          </template>
-          <label class="field-label" for="account-email">Email</label>
-          <input
-            id="account-email"
-            v-model="email"
-            class="text-input"
-            type="email"
-            required
-            autocomplete="email"
-          />
-          <label class="field-label" for="account-password">Password</label>
-          <input
-            id="account-password"
-            v-model="password"
-            class="text-input"
-            type="password"
-            minlength="8"
-            required
-            :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'"
-          />
-          <template v-if="authMode === 'register'">
-            <label class="field-label" for="account-password-confirm">Confirm password</label>
-            <input
-              id="account-password-confirm"
-              v-model="passwordConfirm"
-              class="text-input"
-              type="password"
-              minlength="8"
-              required
-              autocomplete="new-password"
-            />
-          </template>
-          <p v-if="authMode === 'register' && games.length" class="account-progress-note">
-            Your current {{ guestGameLabel }} will stay with this account.
-          </p>
-          <p v-if="authError" class="form-error" role="alert">{{ authError }}</p>
-          <button type="submit" class="button button--primary" :disabled="busy">
-            {{ authMode === 'register' ? 'Create account' : 'Sign in' }}
-          </button>
-        </form>
-        <div v-else class="merge-choice">
-          <p>
-            This guest profile has {{ guestGameLabel }}. You can move them into the account you are
-            signing in to, including scores and round history.
-          </p>
-          <p class="merge-choice__warning">
-            Signing in without merging leaves this progress behind on the guest profile.
-          </p>
-          <p v-if="authError" class="form-error" role="alert">{{ authError }}</p>
-          <button
-            type="button"
-            class="button button--primary"
-            :disabled="busy"
-            @click="finishAuth(true)"
-          >
-            Merge {{ guestGameLabel }} and sign in
-          </button>
-          <button
-            type="button"
-            class="button button--secondary"
-            :disabled="busy"
-            @click="finishAuth(false)"
-          >
-            Sign in without merging
-          </button>
-          <button
-            type="button"
-            class="button button--quiet"
-            :disabled="busy"
-            @click="mergePrompt = false"
-          >
-            Back
-          </button>
-        </div>
-      </section>
-    </div>
-
-    <div
-      v-if="deleteAccountOpen"
-      class="modal-backdrop"
-      @click.self="deleteAccountOpen = false"
-    >
-      <section
-        class="auth-dialog delete-account-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-account-title"
-      >
-        <div class="dialog-header">
-          <div>
-            <p class="section-kicker">Permanent action</p>
-            <h2 id="delete-account-title">Delete your account?</h2>
-          </div>
-          <button
-            type="button"
-            class="icon-button icon-button--muted"
-            :disabled="deleteAccountBusy"
-            title="Close"
-            aria-label="Close account deletion"
-            @click="deleteAccountOpen = false"
-          >
-            <X :size="19" />
-          </button>
-        </div>
-        <p class="delete-account-dialog__warning">
-          This permanently erases your profile and every game involving this account. Your
-          opponents will also lose those shared games from their history.
-        </p>
-        <form class="auth-form" @submit.prevent="confirmDeleteAccount">
-          <label class="field-label" for="delete-account-password">Current password</label>
-          <input
-            id="delete-account-password"
-            v-model="deleteAccountPassword"
-            class="text-input"
-            type="password"
-            minlength="8"
-            required
-            autocomplete="current-password"
-          />
-          <p v-if="deleteAccountError" class="form-error" role="alert">
-            {{ deleteAccountError }}
-          </p>
-          <button type="submit" class="button button--danger" :disabled="deleteAccountBusy">
-            <Trash2 :size="18" />
-            Permanently delete account
-          </button>
-          <button
-            type="button"
-            class="button button--secondary"
-            :disabled="deleteAccountBusy"
-            @click="deleteAccountOpen = false"
-          >
-            Keep account
-          </button>
-        </form>
-      </section>
-    </div>
+    <SiteFooter v-if="ready" />
   </div>
 </template>

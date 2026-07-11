@@ -37,11 +37,29 @@ export async function initializePushNotifications(router: Router) {
   }
   if (permission.receive === 'granted') {
     await PushNotifications.register()
+  } else {
+    await removeStoredDeviceRegistration()
+    await unregisterNativeTransport()
   }
 }
 
 export async function unregisterPushNotifications() {
   if (!isNativeApp) return
+  await removeStoredDeviceRegistration()
+  await unregisterNativeTransport()
+  await PushNotifications.removeAllListeners()
+  initialized = false
+}
+
+async function unregisterNativeTransport() {
+  try {
+    await PushNotifications.unregister()
+  } catch {
+    // The plugin may not have registered on devices where permission was denied.
+  }
+}
+
+async function removeStoredDeviceRegistration() {
   const token = localStorage.getItem(TOKEN_STORAGE_KEY)
   if (token) {
     try {
@@ -51,12 +69,6 @@ export async function unregisterPushNotifications() {
     }
   }
   localStorage.removeItem(TOKEN_STORAGE_KEY)
-  try {
-    await PushNotifications.unregister()
-  } catch {
-    // The plugin may not have registered on devices where permission was denied.
-  }
-  initialized = false
 }
 
 async function registerDevice(token: Token) {

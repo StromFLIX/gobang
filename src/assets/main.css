@@ -79,6 +79,78 @@
   outline-offset: 2px;
 }
 
+.account-menu-wrap {
+  position: relative;
+}
+
+.account-menu {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  display: grid;
+  width: min(14rem, calc(100vw - 2rem));
+  overflow: hidden;
+  padding: 0.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-surface);
+  box-shadow: 0 16px 38px rgba(20, 35, 26, 0.16);
+}
+
+.account-menu::before {
+  position: absolute;
+  top: -0.55rem;
+  right: 0;
+  left: 0;
+  height: 0.55rem;
+  content: '';
+}
+
+.account-menu__identity {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem 0.7rem;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 0.25rem;
+}
+
+.account-menu__identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu__identity small {
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+}
+
+.account-menu > button {
+  display: flex;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: 4px;
+  color: var(--color-text);
+  background: transparent;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-menu > button:hover,
+.account-menu > button:focus-visible {
+  background: #edf3ef;
+  outline: none;
+}
+
+.account-menu > .account-menu__danger {
+  color: var(--color-red);
+}
+
 .account-summary__identity {
   display: grid;
   min-width: 0;
@@ -174,37 +246,6 @@
 .icon-button--danger {
   color: #fff;
   background: var(--color-red);
-}
-
-.account-danger-zone {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--color-border);
-}
-
-.account-danger-zone p {
-  max-width: 34rem;
-  margin-top: 0.25rem;
-  color: var(--color-text-muted);
-  font-size: 0.88rem;
-}
-
-.account-danger-zone .button {
-  flex: 0 0 auto;
-}
-
-.account-danger-zone__actions {
-  display: flex;
-  gap: 0.55rem;
-}
-
-.delete-account-dialog__warning {
-  color: var(--color-text-muted);
-  line-height: 1.55;
 }
 
 .lobby-layout {
@@ -370,22 +411,10 @@
   padding: clamp(1.1rem, 3vw, 1.6rem);
 }
 
-.profile-tool--editor,
 .ranked-tool,
 .game-tool,
-.account-nudge,
-.merge-notice {
+.account-nudge {
   grid-column: 1 / -1;
-}
-
-.merge-notice {
-  margin: 0;
-  padding: 0.75rem 0.9rem;
-  border-left: 3px solid var(--color-green);
-  color: var(--color-green-dark);
-  background: var(--color-surface-muted);
-  font-size: 0.84rem;
-  font-weight: 700;
 }
 
 .section-heading-row,
@@ -441,13 +470,6 @@
 .text-input:focus {
   border-color: var(--color-green);
   box-shadow: 0 0 0 3px rgba(36, 102, 70, 0.12);
-}
-
-.profile-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-top: 1rem;
 }
 
 .create-room {
@@ -882,33 +904,6 @@
 
 .auth-form .button {
   margin-top: 1.25rem;
-}
-
-.account-progress-note,
-.merge-choice p {
-  color: var(--color-text-muted);
-  font-size: 0.84rem;
-  line-height: 1.55;
-}
-
-.account-progress-note {
-  margin-top: 1rem;
-}
-
-.merge-choice {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-}
-
-.merge-choice__warning {
-  padding: 0.7rem 0.8rem;
-  border-left: 3px solid var(--color-yellow);
-  background: var(--color-surface-muted);
-}
-
-.merge-choice .button--primary {
-  margin-top: 0.35rem;
 }
 
 .progress-choice {
@@ -1393,7 +1388,6 @@
 
   .lobby-intro,
   .recent-games,
-  .profile-tool--editor,
   .ranked-tool,
   .game-tool,
   .account-nudge {
@@ -1436,15 +1430,6 @@
 
   .lobby-entry h1 {
     font-size: 2.8rem;
-  }
-
-  .account-danger-zone {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .account-danger-zone__actions .button {
-    flex: 1 1 0;
   }
 
   .game-layout {

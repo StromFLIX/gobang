@@ -75,9 +75,38 @@ jobs:
           printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/gobang-release.jks"
 
+      - name: Validate public legal configuration
+        env:
+          LEGAL_OPERATOR_NAME: ${{ vars.LEGAL_OPERATOR_NAME }}
+          LEGAL_COUNTRY: ${{ vars.LEGAL_COUNTRY }}
+          LEGAL_EMAIL: ${{ vars.LEGAL_EMAIL }}
+          LEGAL_HOSTING_PROVIDER: ${{ vars.LEGAL_HOSTING_PROVIDER }}
+          LEGAL_HOSTING_LOCATION: ${{ vars.LEGAL_HOSTING_LOCATION }}
+        run: |
+          for variable in \
+            LEGAL_OPERATOR_NAME \
+            LEGAL_COUNTRY \
+            LEGAL_EMAIL \
+            LEGAL_HOSTING_PROVIDER \
+            LEGAL_HOSTING_LOCATION
+          do
+            if [[ -z "${!variable}" ]]; then
+              echo "Missing GitHub Actions variable: ${variable}" >&2
+              exit 1
+            fi
+          done
+
       - name: Build signed Android release
         env:
           VITE_API_BASE_URL: ${{ vars.ANDROID_API_BASE_URL || 'https://gobang.stromflix.com' }}
+          VITE_LEGAL_OPERATOR_NAME: ${{ vars.LEGAL_OPERATOR_NAME }}
+          VITE_LEGAL_COUNTRY: ${{ vars.LEGAL_COUNTRY }}
+          VITE_LEGAL_EMAIL: ${{ vars.LEGAL_EMAIL }}
+          VITE_LEGAL_PHONE: ${{ vars.LEGAL_PHONE }}
+          VITE_LEGAL_REGISTER_ENTRY: ${{ vars.LEGAL_REGISTER_ENTRY }}
+          VITE_LEGAL_VAT_ID: ${{ vars.LEGAL_VAT_ID }}
+          VITE_LEGAL_HOSTING_PROVIDER: ${{ vars.LEGAL_HOSTING_PROVIDER }}
+          VITE_LEGAL_HOSTING_LOCATION: ${{ vars.LEGAL_HOSTING_LOCATION }}
           ANDROID_VERSION_CODE: ${{ github.run_number }}
           ANDROID_VERSION_NAME: 1.0.${{ github.run_number }}
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/gobang-release.jks

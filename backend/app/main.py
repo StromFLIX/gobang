@@ -6,7 +6,17 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-from app.api import auth, games, invitations, leaderboard, matchmaking, presence, push, reactions
+from app.api import (
+    auth,
+    games,
+    invitations,
+    leaderboard,
+    legal,
+    matchmaking,
+    presence,
+    push,
+    reactions,
+)
 from app.clients.firebase import FirebasePushGateway
 from app.clients.pocketbase import PocketBaseClient, PocketBaseError
 from app.config import Settings, get_settings
@@ -90,12 +100,13 @@ def create_app(
             await client.close()
 
     application = FastAPI(title="Gobang API", version="0.1.0", lifespan=lifespan)
+    application.state.settings = resolved_settings
     application.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origin_list,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-Legal-Reveal"],
     )
     application.include_router(auth.router)
     application.include_router(games.router)
@@ -103,6 +114,7 @@ def create_app(
     application.include_router(reactions.router)
     application.include_router(matchmaking.router)
     application.include_router(presence.router)
+    application.include_router(legal.router)
     application.include_router(push.router)
     application.include_router(leaderboard.router)
 
@@ -127,39 +139,27 @@ def create_app(
         return JSONResponse(status_code=422, content={"detail": str(error)})
 
     @application.exception_handler(InvitationNotFound)
-    async def invitation_not_found(
-        _request: Request, error: InvitationNotFound
-    ) -> JSONResponse:
+    async def invitation_not_found(_request: Request, error: InvitationNotFound) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(error)})
 
     @application.exception_handler(InvitationForbidden)
-    async def invitation_forbidden(
-        _request: Request, error: InvitationForbidden
-    ) -> JSONResponse:
+    async def invitation_forbidden(_request: Request, error: InvitationForbidden) -> JSONResponse:
         return JSONResponse(status_code=403, content={"detail": str(error)})
 
     @application.exception_handler(InvitationConflict)
-    async def invitation_conflict(
-        _request: Request, error: InvitationConflict
-    ) -> JSONResponse:
+    async def invitation_conflict(_request: Request, error: InvitationConflict) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": str(error)})
 
     @application.exception_handler(InvitationInvalid)
-    async def invitation_invalid(
-        _request: Request, error: InvitationInvalid
-    ) -> JSONResponse:
+    async def invitation_invalid(_request: Request, error: InvitationInvalid) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(error)})
 
     @application.exception_handler(ReactionInvalid)
-    async def reaction_invalid(
-        _request: Request, error: ReactionInvalid
-    ) -> JSONResponse:
+    async def reaction_invalid(_request: Request, error: ReactionInvalid) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": str(error)})
 
     @application.exception_handler(MatchmakingForbidden)
-    async def matchmaking_forbidden(
-        _request: Request, error: MatchmakingForbidden
-    ) -> JSONResponse:
+    async def matchmaking_forbidden(_request: Request, error: MatchmakingForbidden) -> JSONResponse:
         return JSONResponse(status_code=403, content={"detail": str(error)})
 
     @application.exception_handler(PushForbidden)
@@ -182,10 +182,15 @@ def add_spa_routes(application: FastAPI, frontend_dist: Path) -> None:
 
     @application.get("/{path:path}", include_in_schema=False)
     async def spa(path: str) -> FileResponse:
+        headers = (
+            {"X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet"}
+            if path in {"impressum", "privacy"}
+            else None
+        )
         requested_file = (frontend_dist / path).resolve()
         if requested_file.is_relative_to(frontend_dist.resolve()) and requested_file.is_file():
-            return FileResponse(requested_file)
-        return FileResponse(index_file)
+            return FileResponse(requested_file, headers=headers)
+        return FileResponse(index_file, headers=headers)
 
 
 app = create_app()

@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import replace
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -58,9 +59,7 @@ class MemoryInvitationRepository:
     async def get_by_id(self, invitation_id: str) -> Invitation | None:
         return deepcopy(self.invitations.get(invitation_id))
 
-    async def find_pending(
-        self, challenger_id: str, recipient_id: str
-    ) -> Invitation | None:
+    async def find_pending(self, challenger_id: str, recipient_id: str) -> Invitation | None:
         return next(
             (
                 deepcopy(invitation)
@@ -110,8 +109,7 @@ class MemoryMatchmakingRepository:
                 deepcopy(ticket)
                 for ticket in reversed(self.tickets.values())
                 if ticket.player.id == player_id
-                and ticket.status
-                in {MatchmakingStatus.WAITING, MatchmakingStatus.MATCHED}
+                and ticket.status in {MatchmakingStatus.WAITING, MatchmakingStatus.MATCHED}
             ),
             None,
         )
@@ -139,9 +137,7 @@ class MemoryPushRepository:
 
     async def list_for_player(self, player_id: str) -> Sequence[PushDevice]:
         return [
-            deepcopy(device)
-            for device in self.devices.values()
-            if device.player_id == player_id
+            deepcopy(device) for device in self.devices.values() if device.player_id == player_id
         ]
 
     async def delete(self, player_id: str, token: str) -> None:
@@ -195,17 +191,13 @@ class FakePocketBase:
             raise PocketBaseError(400, "Invalid credentials")
         return PlayerSession("account-token", self.players["account-token"])
 
-    async def update_profile(
-        self, player_id: str, display_name: str, avatar_seed: str
-    ) -> Player:
+    async def update_profile(self, player_id: str, display_name: str, avatar_seed: str) -> Player:
         token = next(token for token, player in self.players.items() if player.id == player_id)
         updated = replace(self.players[token], display_name=display_name, avatar_seed=avatar_seed)
         self.players[token] = updated
         return updated
 
-    async def register_guest(
-        self, player_id: str, email: str, password: str
-    ) -> PlayerSession:
+    async def register_guest(self, player_id: str, email: str, password: str) -> PlayerSession:
         token = next(token for token, player in self.players.items() if player.id == player_id)
         registered = replace(self.players[token], is_guest=False)
         self.players[token] = registered
@@ -214,9 +206,7 @@ class FakePocketBase:
     async def delete_account(self, player_id: str, password: str) -> None:
         if password != "password123":
             raise PocketBaseError(401, "Current password is incorrect")
-        tokens = [
-            token for token, player in self.players.items() if player.id == player_id
-        ]
+        tokens = [token for token, player in self.players.items() if player.id == player_id]
         for token in tokens:
             del self.players[token]
 
@@ -225,19 +215,83 @@ def make_client(
     reaction_repository: MemoryReactionRepository | None = None,
     matchmaking_repository: MemoryMatchmakingRepository | None = None,
     push_repository: MemoryPushRepository | None = None,
+    settings: Settings | None = None,
 ) -> TestClient:
     app = create_app(
-        settings=Settings(frontend_dist="missing"),
+        settings=settings
+        or Settings(
+            frontend_dist="missing",
+            legal_street_address="Private Street 1",
+            legal_postal_city="8000 Zurich",
+        ),
         pocketbase=FakePocketBase(),  # type: ignore[arg-type]
         repository=MemoryRepository(),
         invitation_repository=MemoryInvitationRepository(),
         reaction_repository=reaction_repository or MemoryReactionRepository(),
-        matchmaking_repository=(
-            matchmaking_repository or MemoryMatchmakingRepository()
-        ),
+        matchmaking_repository=(matchmaking_repository or MemoryMatchmakingRepository()),
         push_repository=push_repository,
     )
     return TestClient(app)
+
+
+def test_legal_address_requires_deliberate_uncached_reveal() -> None:
+    with make_client() as client:
+        hidden_response = client.post("/api/legal/address")
+        assert hidden_response.status_code == 404
+
+        response = client.post(
+            "/api/legal/address",
+            headers={"X-Legal-Reveal": "postal-address"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "street_address": "Private Street 1",
+        "postal_city": "8000 Zurich",
+    }
+    assert response.headers["cache-control"] == "no-store, max-age=0"
+    assert response.headers["x-robots-tag"] == "noindex, nofollow, noarchive, nosnippet"
+
+
+def test_legal_address_fails_closed_when_not_configured() -> None:
+    with make_client(settings=Settings(frontend_dist="missing")) as client:
+        response = client.post(
+            "/api/legal/address",
+            headers={"X-Legal-Reveal": "postal-address"},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Legal address is not configured"}
+
+
+def test_legal_pages_are_not_indexable(tmp_path: Path) -> None:
+    (tmp_path / "index.html").write_text("<html><body>Gobang</body></html>")
+
+    with make_client(settings=Settings(frontend_dist=tmp_path)) as client:
+        imprint = client.get("/impressum")
+        privacy = client.get("/privacy")
+        home = client.get("/")
+
+    expected = "noindex, nofollow, noarchive, nosnippet"
+    assert imprint.headers["x-robots-tag"] == expected
+    assert privacy.headers["x-robots-tag"] == expected
+    assert "x-robots-tag" not in home.headers
+
+
+def test_android_can_preflight_legal_address_reveal() -> None:
+    with make_client() as client:
+        response = client.options(
+            "/api/legal/address",
+            headers={
+                "Origin": "capacitor://localhost",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "x-legal-reveal",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "capacitor://localhost"
+    assert "X-Legal-Reveal" in response.headers["access-control-allow-headers"]
 
 
 def test_guest_profile_and_registration_flow() -> None:
@@ -311,10 +365,13 @@ def test_registered_account_deletion_requires_password_and_removes_session() -> 
             json={"password": "password123"},
         )
         assert deleted.status_code == 204
-        assert client.get(
-            "/api/auth/me",
-            headers={"Authorization": "Bearer account-token"},
-        ).status_code == 401
+        assert (
+            client.get(
+                "/api/auth/me",
+                headers={"Authorization": "Bearer account-token"},
+            ).status_code
+            == 401
+        )
 
 
 def test_registered_android_device_can_enable_push_notifications() -> None:
@@ -358,9 +415,7 @@ def test_registered_android_device_can_enable_push_notifications() -> None:
 
 def test_guest_progress_can_be_merged_while_signing_in() -> None:
     with make_client() as client:
-        created = client.post(
-            "/api/games", headers={"Authorization": "Bearer guest-token"}
-        ).json()
+        created = client.post("/api/games", headers={"Authorization": "Bearer guest-token"}).json()
 
         response = client.post(
             "/api/auth/merge-login",
@@ -371,9 +426,7 @@ def test_guest_progress_can_be_merged_while_signing_in() -> None:
         assert response.status_code == 200
         assert response.json()["player"]["id"] == "account"
         assert response.json()["transferred_games"] == 1
-        games = client.get(
-            "/api/games", headers={"Authorization": "Bearer account-token"}
-        ).json()
+        games = client.get("/api/games", headers={"Authorization": "Bearer account-token"}).json()
         assert games[0]["id"] == created["id"]
         assert games[0]["host"]["id"] == "account"
 
@@ -402,9 +455,9 @@ def test_registered_players_can_challenge_and_accept_before_game_creation() -> N
             json={"player_id": "rival"},
         )
         assert duplicate.status_code == 409
-        assert client.get(
-            "/api/games", headers={"Authorization": "Bearer account-token"}
-        ).json() == []
+        assert (
+            client.get("/api/games", headers={"Authorization": "Bearer account-token"}).json() == []
+        )
 
         incoming = client.get(
             "/api/invitations", headers={"Authorization": "Bearer rival-token"}
@@ -424,17 +477,16 @@ def test_registered_players_can_challenge_and_accept_before_game_creation() -> N
         ).json()
         assert account_games[0]["status"] == "active"
         assert account_games[0]["guest"]["id"] == "rival"
-        assert client.get(
-            "/api/invitations", headers={"Authorization": "Bearer rival-token"}
-        ).json() == []
+        assert (
+            client.get("/api/invitations", headers={"Authorization": "Bearer rival-token"}).json()
+            == []
+        )
 
 
 def test_game_reactions_are_private_validated_and_upserted() -> None:
     reactions = MemoryReactionRepository()
     with make_client(reactions) as client:
-        created = client.post(
-            "/api/games", headers={"Authorization": "Bearer host-token"}
-        ).json()
+        created = client.post("/api/games", headers={"Authorization": "Bearer host-token"}).json()
         reaction_url = f"/api/games/{created['id']}/reactions"
 
         before_join = client.post(
@@ -497,13 +549,16 @@ def test_registered_players_wait_pair_and_leave_ranked_matchmaking() -> None:
         )
         assert waiting.status_code == 200
         assert waiting.json()["status"] == "waiting"
-        assert client.post(
-            "/api/matchmaking/join",
-            headers={"Authorization": "Bearer account-token"},
-        ).json()["id"] == waiting.json()["id"]
-        assert client.get(
-            "/api/games", headers={"Authorization": "Bearer account-token"}
-        ).json() == []
+        assert (
+            client.post(
+                "/api/matchmaking/join",
+                headers={"Authorization": "Bearer account-token"},
+            ).json()["id"]
+            == waiting.json()["id"]
+        )
+        assert (
+            client.get("/api/games", headers={"Authorization": "Bearer account-token"}).json() == []
+        )
 
         matched_rival = client.post(
             "/api/matchmaking/join",
@@ -524,10 +579,13 @@ def test_registered_players_wait_pair_and_leave_ranked_matchmaking() -> None:
         assert account_games[0]["status"] == "active"
         assert account_games[0]["guest"]["id"] == "rival"
 
-        assert client.delete(
-            "/api/matchmaking",
-            headers={"Authorization": "Bearer account-token"},
-        ).json()["status"] == "consumed"
+        assert (
+            client.delete(
+                "/api/matchmaking",
+                headers={"Authorization": "Bearer account-token"},
+            ).json()["status"]
+            == "consumed"
+        )
         client.delete(
             "/api/matchmaking",
             headers={"Authorization": "Bearer rival-token"},
@@ -537,14 +595,20 @@ def test_registered_players_wait_pair_and_leave_ranked_matchmaking() -> None:
             headers={"Authorization": "Bearer account-token"},
         ).json()
         assert next_wait["status"] == "waiting"
-        assert client.delete(
-            "/api/matchmaking",
-            headers={"Authorization": "Bearer account-token"},
-        ).json()["status"] == "cancelled"
-        assert client.get(
-            "/api/matchmaking",
-            headers={"Authorization": "Bearer account-token"},
-        ).json() is None
+        assert (
+            client.delete(
+                "/api/matchmaking",
+                headers={"Authorization": "Bearer account-token"},
+            ).json()["status"]
+            == "cancelled"
+        )
+        assert (
+            client.get(
+                "/api/matchmaking",
+                headers={"Authorization": "Bearer account-token"},
+            ).json()
+            is None
+        )
 
 
 def test_presence_counts_online_players_and_distinct_active_matches() -> None:
@@ -596,9 +660,7 @@ def test_presence_counts_online_players_and_distinct_active_matches() -> None:
 
 def test_private_room_turn_and_revision_protection() -> None:
     with make_client() as client:
-        created = client.post(
-            "/api/games", headers={"Authorization": "Bearer host-token"}
-        ).json()
+        created = client.post("/api/games", headers={"Authorization": "Bearer host-token"}).json()
         joined = client.post(
             "/api/games/join",
             headers={"Authorization": "Bearer guest-token"},
@@ -638,9 +700,7 @@ def test_private_room_turn_and_revision_protection() -> None:
 
 def test_leaderboard_reports_overall_and_personal_results() -> None:
     with make_client() as client:
-        created = client.post(
-            "/api/games", headers={"Authorization": "Bearer host-token"}
-        ).json()
+        created = client.post("/api/games", headers={"Authorization": "Bearer host-token"}).json()
         joined = client.post(
             "/api/games/join",
             headers={"Authorization": "Bearer guest-token"},
@@ -651,9 +711,7 @@ def test_leaderboard_reports_overall_and_personal_results() -> None:
             headers={"Authorization": "Bearer host-token"},
         )
 
-        response = client.get(
-            "/api/leaderboard", headers={"Authorization": "Bearer host-token"}
-        )
+        response = client.get("/api/leaderboard", headers={"Authorization": "Bearer host-token"})
 
         assert response.status_code == 200
         body = response.json()

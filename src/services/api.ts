@@ -22,6 +22,11 @@ export class ApiError extends Error {
   }
 }
 
+export interface LegalAddress {
+  street_address: string
+  postal_city: string
+}
+
 let accessToken = ''
 
 export function setAccessToken(token: string) {
@@ -52,12 +57,7 @@ function json(method: string, body?: unknown): RequestInit {
 
 export const api = {
   createGuest: () => request<GuestSession>('/api/auth/guest', json('POST')),
-  createAccount: (
-    email: string,
-    password: string,
-    displayName: string,
-    avatarSeed: string,
-  ) =>
+  createAccount: (email: string, password: string, displayName: string, avatarSeed: string) =>
     request<AuthSession>(
       '/api/auth/accounts',
       json('POST', {
@@ -70,10 +70,7 @@ export const api = {
   login: (email: string, password: string) =>
     request<AuthSession>('/api/auth/login', json('POST', { email, password })),
   mergeLogin: (email: string, password: string) =>
-    request<MergedAuthSession>(
-      '/api/auth/merge-login',
-      json('POST', { email, password }),
-    ),
+    request<MergedAuthSession>('/api/auth/merge-login', json('POST', { email, password })),
   getMe: () => request<Player>('/api/auth/me'),
   updateProfile: (displayName: string, avatarSeed: string) =>
     request<Player>(
@@ -92,17 +89,11 @@ export const api = {
     request<Invitation>(`/api/invitations/${invitationId}/accept`, json('POST')),
   dismissInvitation: (invitationId: string) =>
     request<Invitation>(`/api/invitations/${invitationId}/dismiss`, json('POST')),
-  getMatchmakingTicket: () =>
-    request<MatchmakingTicket | null>('/api/matchmaking'),
-  joinMatchmaking: () =>
-    request<MatchmakingTicket>('/api/matchmaking/join', json('POST')),
-  leaveMatchmaking: () =>
-    request<MatchmakingTicket | null>('/api/matchmaking', json('DELETE')),
+  getMatchmakingTicket: () => request<MatchmakingTicket | null>('/api/matchmaking'),
+  joinMatchmaking: () => request<MatchmakingTicket>('/api/matchmaking/join', json('POST')),
+  leaveMatchmaking: () => request<MatchmakingTicket | null>('/api/matchmaking', json('DELETE')),
   heartbeat: (gameId: string | null = null) =>
-    request<PresenceStats>(
-      '/api/presence/heartbeat',
-      json('POST', { game_id: gameId }),
-    ),
+    request<PresenceStats>('/api/presence/heartbeat', json('POST', { game_id: gameId })),
   listGames: () => request<Game[]>('/api/games'),
   createGame: () => request<Game>('/api/games', json('POST')),
   joinGame: (inviteCode: string) =>
@@ -117,20 +108,17 @@ export const api = {
     ),
   sendReaction: (gameId: string, kind: ReactionKind) =>
     request<GameReaction>(`/api/games/${gameId}/reactions`, json('POST', { kind })),
-  cancelGame: (gameId: string) =>
-    request<Game>(`/api/games/${gameId}/cancel`, json('POST')),
-  resignGame: (gameId: string) =>
-    request<Game>(`/api/games/${gameId}/resign`, json('POST')),
+  cancelGame: (gameId: string) => request<Game>(`/api/games/${gameId}/cancel`, json('POST')),
+  resignGame: (gameId: string) => request<Game>(`/api/games/${gameId}/resign`, json('POST')),
   setRematch: (gameId: string, ready: boolean) =>
     request<Game>(`/api/games/${gameId}/rematch`, json('PUT', { ready })),
   registerPushDevice: (token: string) =>
-    request<void>(
-      '/api/push/devices',
-      json('PUT', { token, platform: 'android' }),
-    ),
+    request<void>('/api/push/devices', json('PUT', { token, platform: 'android' })),
   unregisterPushDevice: (token: string) =>
-    request<void>(
-      '/api/push/devices',
-      json('DELETE', { token, platform: 'android' }),
-    ),
+    request<void>('/api/push/devices', json('DELETE', { token, platform: 'android' })),
+  revealLegalAddress: () =>
+    request<LegalAddress>('/api/legal/address', {
+      method: 'POST',
+      headers: { 'X-Legal-Reveal': 'postal-address' },
+    }),
 }

@@ -86,7 +86,7 @@ Open the GitHub repository, then go to **Settings → Secrets and variables → 
 - `ANDROID_KEY_ALIAS`: `gobang`, or the alias used when creating the key
 - `ANDROID_KEY_PASSWORD`: the private-key password
 
-Under **Settings → Secrets and variables → Actions → Variables**, optionally set `ANDROID_API_BASE_URL`. It defaults to `https://gobang.stromflix.com` when omitted. Under **Settings → Actions → General → Workflow permissions**, allow **Read and write permissions** so the workflow can move the `android-latest` tag and update its GitHub Release. If the repository has tag rulesets, allow GitHub Actions to update `android-latest`.
+Under **Settings → Secrets and variables → Actions → Variables**, optionally set `ANDROID_API_BASE_URL`. It defaults to `https://gobang.stromflix.com` when omitted. Also set the public legal variables documented under **EU privacy and legal notice** below. The release workflow refuses to publish an Android build when the required legal variables are missing. Under **Settings → Actions → General → Workflow permissions**, allow **Read and write permissions** so the workflow can move the `android-latest` tag and update its GitHub Release. If the repository has tag rulesets, allow GitHub Actions to update `android-latest`.
 
 Do not add the Firebase backend service-account key to GitHub Actions. `FIREBASE_CREDENTIALS_JSON` belongs only in the deployed backend environment. The APK build needs the Android `google-services.json`, not the Admin SDK private key.
 
@@ -107,11 +107,35 @@ The app includes no billing, advertising, analytics, backup, contacts, storage, 
 The Android project targets API 36, uses a monotonically increasing CI version code, produces a signed Android App Bundle, has production launcher and notification assets, disables cleartext traffic and device backup, and includes an in-app account-deletion flow. The public compliance routes are:
 
 - `https://gobang.stromflix.com/privacy`
+- `https://gobang.stromflix.com/impressum`
 - `https://gobang.stromflix.com/account-deletion`
 
 The deletion page signs the user in with their current credentials and permanently removes the account, games involving it, invitations, matchmaking tickets, reactions, and notification devices. Deploy the frontend and backend together before submitting these URLs to Play Console.
 
 The remaining publication work is intentionally manual in Play Console: create the app listing, enroll in Play App Signing, upload `gobang-android.aab`, complete App access and Content rating, declare the target audience, submit the Data safety answers that match the privacy policy, provide screenshots/graphics/contact details, select countries and pricing, and complete any required testing track. The first Play upload establishes the application and upload-key relationship; later CI publication can be added after Play grants service-account access.
+
+## Swiss and EU privacy and legal notice
+
+The public privacy policy and Impressum identify a Swiss controller and also cover the GDPR where it applies to EU or EEA users. Configure every value before public deployment; an incomplete build displays a warning instead of invented information.
+
+These values are public and are embedded into both the website and Android builds. Set them in `.env` for Docker Compose and as GitHub Actions **Variables** for Android releases:
+
+- `LEGAL_OPERATOR_NAME`: full legal name of the individual or organization operating Gobang
+- `LEGAL_COUNTRY`: country of establishment
+- `LEGAL_EMAIL`: monitored privacy and legal contact address
+- `LEGAL_PHONE`: public contact number when supplied
+- `LEGAL_HOSTING_PROVIDER`: legal names of the VPS infrastructure providers
+- `LEGAL_HOSTING_LOCATION`: countries where the Gobang API and PocketBase data are hosted
+
+Set `LEGAL_REGISTER_ENTRY` and `LEGAL_VAT_ID` only when they apply. For local Android builds, use the equivalent `VITE_LEGAL_*` fields in `.env.android.local` as shown by `.env.android.example`.
+
+`LEGAL_STREET_ADDRESS` and `LEGAL_POSTAL_CITY` are different: set them only in the deployed backend's Coolify environment. They are runtime values, are not accepted as Vite or Android build variables, and must not be added to GitHub Actions. The legal pages initially show a **Reveal postal address** button. Activation sends a deliberate POST request to the backend, which returns the address with `no-store` and `noindex` headers. The legal pages themselves also return `X-Robots-Tag: noindex` in production.
+
+This is a best-effort indexing deterrent, not a secrecy boundary. Any unauthenticated address that a person can reveal can also be retrieved by a crawler designed to execute the same request. Authentication or a CAPTCHA would add barriers but would not guarantee a human visitor and could make required provider information insufficiently accessible. The postal details therefore still have to be treated as public information.
+
+For a Swiss service offering goods or services in electronic commerce, Article 3(1)(s) UWG requires clear and complete identity and contact-address information including email. Article 19 of the Swiss FADP requires controller identity/contact, purposes, recipients, and foreign-processing details. The current project is documented as a free personal hobby without advertising, payments, sponsorship, or data sales. Review the legal notice, terms, payment processor disclosures, tax/VAT position, and withdrawal/consumer rules before enabling the planned payment feature.
+
+The repository supplies technical disclosure, deletion, minimization, push-withdrawal, anti-indexing, and log-rotation controls, but code alone cannot establish compliance. The operator must verify the published facts, sign any required data-processing agreements with OVHcloud, Hetzner, and Google, document processing activities, handle data-subject requests and breaches, secure and back up the deployment, and update the notice when providers or processing change. The current app uses only necessary local/session storage and no advertising or analytics cookies; reassess consent requirements before adding analytics, marketing, or other non-essential tracking.
 
 ## Checks
 
@@ -135,7 +159,7 @@ npm run test:e2e
 ## Coolify
 
 1. Create a Docker Compose resource from this repository.
-2. Set `PB_SUPERUSER_EMAIL`, a long random `PB_SUPERUSER_PASSWORD`, and `FIREBASE_CREDENTIALS_JSON` as secrets.
+2. Set `PB_SUPERUSER_EMAIL`, a long random `PB_SUPERUSER_PASSWORD`, and `FIREBASE_CREDENTIALS_JSON` as secrets, and set every required `LEGAL_*` value listed above.
 3. Attach the public domain to the `caddy` service on port `80`.
 4. Keep the generated `pocketbase_data` volume persistent across deployments.
 5. Configure the health check against `/health` through the public domain.

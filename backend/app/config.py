@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     frontend_dist: Path = Path("frontend_dist")
     firebase_credentials_json: str = ""
     cors_origins: str = "http://localhost,https://localhost,capacitor://localhost"
+    legal_street_address: str = ""
+    legal_postal_city: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

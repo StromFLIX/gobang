@@ -1,5 +1,11 @@
 name: gobang
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   pocketbase:
     build:
@@ -10,6 +16,7 @@ services:
       PB_SUPERUSER_EMAIL: ${PB_SUPERUSER_EMAIL:?Set PB_SUPERUSER_EMAIL}
       PB_SUPERUSER_PASSWORD: ${PB_SUPERUSER_PASSWORD:?Set PB_SUPERUSER_PASSWORD}
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - pocketbase_data:/pb/pb_data
     networks:
@@ -19,16 +26,28 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_LEGAL_OPERATOR_NAME: ${LEGAL_OPERATOR_NAME:-}
+        VITE_LEGAL_COUNTRY: ${LEGAL_COUNTRY:-}
+        VITE_LEGAL_EMAIL: ${LEGAL_EMAIL:-}
+        VITE_LEGAL_PHONE: ${LEGAL_PHONE:-}
+        VITE_LEGAL_REGISTER_ENTRY: ${LEGAL_REGISTER_ENTRY:-}
+        VITE_LEGAL_VAT_ID: ${LEGAL_VAT_ID:-}
+        VITE_LEGAL_HOSTING_PROVIDER: ${LEGAL_HOSTING_PROVIDER:-}
+        VITE_LEGAL_HOSTING_LOCATION: ${LEGAL_HOSTING_LOCATION:-}
     environment:
       POCKETBASE_URL: http://pocketbase:8090
       PB_SUPERUSER_EMAIL: ${PB_SUPERUSER_EMAIL:?Set PB_SUPERUSER_EMAIL}
       PB_SUPERUSER_PASSWORD: ${PB_SUPERUSER_PASSWORD:?Set PB_SUPERUSER_PASSWORD}
       FRONTEND_DIST: /app/frontend_dist
       FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
+      LEGAL_STREET_ADDRESS: ${LEGAL_STREET_ADDRESS:-}
+      LEGAL_POSTAL_CITY: ${LEGAL_POSTAL_CITY:-}
     depends_on:
       pocketbase:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
     networks:
       - internal
 
@@ -37,13 +56,14 @@ services:
       context: .
       dockerfile: Caddy.Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       app:
         condition: service_healthy
       pocketbase:
         condition: service_healthy
     expose:
-      - "80"
+      - '80'
     networks:
       - internal
 
