@@ -1,3 +1,12 @@
+FROM rust:1.95-slim-bookworm AS bot-engine
+
+WORKDIR /build
+RUN rustup target add wasm32-unknown-unknown
+COPY bot-engine/Cargo.toml bot-engine/Cargo.lock ./
+COPY bot-engine/src ./src
+RUN cargo build --target wasm32-unknown-unknown --release
+
+
 FROM node:22-alpine AS frontend
 
 ARG VITE_LEGAL_OPERATOR_NAME
@@ -15,8 +24,9 @@ RUN npm ci
 
 COPY env.d.ts index.html tsconfig*.json vite.config.ts eslint.config.ts .prettierrc.json ./
 COPY src ./src
+COPY --from=bot-engine /build/target/wasm32-unknown-unknown/release/gobang_bot.wasm ./src/wasm/gobang_bot.wasm
 COPY public ./public
-RUN npm run build-only
+RUN npx vite build
 
 
 FROM python:3.12-slim-bookworm AS runtime

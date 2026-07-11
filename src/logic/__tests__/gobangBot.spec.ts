@@ -11,10 +11,10 @@ function boardWith(stones: Record<number, Stone>) {
 }
 
 describe('Gobang bot', () => {
-  it('uses a one-second easy profile and five-second stronger profiles', () => {
+  it('uses increasing budgets for easy, medium, and hard', () => {
     expect(BOT_PROFILES.easy.timeBudgetMs).toBe(1_000)
     expect(BOT_PROFILES.medium.timeBudgetMs).toBe(5_000)
-    expect(BOT_PROFILES.hard.timeBudgetMs).toBe(5_000)
+    expect(BOT_PROFILES.hard.timeBudgetMs).toBe(10_000)
     expect(BOT_PROFILES.medium.maxDepth).toBeGreaterThan(BOT_PROFILES.easy.maxDepth)
     expect(BOT_PROFILES.hard.threatScore).toBeLessThan(BOT_PROFILES.medium.threatScore)
     expect(BOT_PROFILES.hard.tacticalExtensionDepth).toBeGreaterThan(

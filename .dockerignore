@@ -9,6 +9,8 @@ backend/**/__pycache__
 coverage
 dist
 node_modules
+bot-engine/target
 pocketbase/pb_data
+src/wasm/*.wasm
 *.log
 *.local

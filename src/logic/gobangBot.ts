@@ -41,7 +41,7 @@ export const BOT_PROFILES: Record<BotDifficulty, BotProfile> = {
     candidateLimit: 16,
   },
   hard: {
-    timeBudgetMs: 5_000,
+    timeBudgetMs: 10_000,
     maxDepth: 10,
     tacticalExtensionDepth: 8,
     threatScore: OPEN_THREE_THREAT_SCORE,
@@ -64,6 +64,7 @@ export interface BotResult {
   depth: number
   elapsedMs: number
   nodes: number
+  engine?: 'typescript' | 'wasm'
 }
 
 interface SearchPosition {
@@ -135,6 +136,7 @@ export function findBestMove({
     depth: completedDepth,
     elapsedMs: Date.now() - startedAt,
     nodes: context.nodes,
+    engine: 'typescript',
   }
 }
 

@@ -27,7 +27,7 @@ const DIFFICULTY_COPY: Record<BotDifficulty, { title: string; description: strin
     description: 'Deeper alpha-beta search and tactical lines.',
   },
   hard: {
-    title: 'Five-second threat search',
+    title: 'Ten-second threat search',
     description: 'Deeper search plus open-three attack and defense lines.',
   },
 }
@@ -485,7 +485,8 @@ function createMatch(
             </div>
             <div v-if="botThinking" class="bot-thinking-bar" aria-hidden="true"><i /></div>
             <p v-else-if="lastSearch" class="bot-search-detail">
-              Depth {{ lastSearch.depth }} · {{ lastSearch.elapsedMs }} ms
+              {{ lastSearch.engine === 'wasm' ? 'Rust' : 'JS' }} · Depth {{ lastSearch.depth }} ·
+              {{ lastSearch.nodes.toLocaleString() }} nodes · {{ lastSearch.elapsedMs }} ms
             </p>
             <button
               v-if="match.status !== 'active'"

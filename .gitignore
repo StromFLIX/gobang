@@ -22,6 +22,7 @@ __pycache__/
 pocketbase/pb_data/
 playwright-report/
 test-results/
+.playwright-mcp/
 android/app/google-services.json
 *.jks
 *.keystore
@@ -40,3 +41,7 @@ android/app/google-services.json
 *.sw?
 
 *.tsbuildinfo
+
+# Rust and WebAssembly build output
+target/
+src/wasm/*.wasm
