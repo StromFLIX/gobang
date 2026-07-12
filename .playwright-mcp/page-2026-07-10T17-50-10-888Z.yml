@@ -1,7 +1,0 @@
-- generic [ref=e3]:
-  - banner [ref=e4]:
-    - link "Gobang home" [ref=e5] [cursor=pointer]:
-      - /url: /
-      - strong [ref=e6]: Gobang
-  - main [ref=e7]:
-    - paragraph [ref=e11]: Opening your player…
